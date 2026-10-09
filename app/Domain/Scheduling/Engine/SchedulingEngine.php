@@ -19,6 +19,8 @@ class SchedulingEngine
     private const MINUTES_PER_CREDIT = 50;
     private const WORK_START_HOUR = 8;
     private const WORK_END_HOUR = 16;
+    private const MIN_START_HOUR = 7;
+    private const MAX_END_HOUR = 20;
     private const LUNCH_BREAK_START = '12:00';
     private const LUNCH_BREAK_END = '13:00';
     private const FRIDAY_PRAYER_START = '11:20';
@@ -304,10 +306,11 @@ class SchedulingEngine
     private function generateTimeSlots(): array
     {
         $slots = [];
-        $totalSlots = 16;
+        $totalMinutes = (self::MAX_END_HOUR - self::MIN_START_HOUR) * 60;
+        $totalSlots = (int) floor($totalMinutes / self::SLOT_DURATION_MINUTES);
 
         for ($i = 0; $i < $totalSlots; $i++) {
-            $startMinutes = self::WORK_START_HOUR * 60 + ($i * self::SLOT_DURATION_MINUTES);
+            $startMinutes = self::MIN_START_HOUR * 60 + ($i * self::SLOT_DURATION_MINUTES);
             $endMinutes = $startMinutes + self::SLOT_DURATION_MINUTES;
 
             $startTime = sprintf('%02d:%02d', intdiv($startMinutes, 60), $startMinutes % 60);
@@ -408,11 +411,13 @@ class SchedulingEngine
                     continue;
                 }
 
-                if ((int) explode(':', $startSlot['start_time'])[0] < self::WORK_START_HOUR) {
+                if ((int) explode(':', $startSlot['start_time'])[0] < self::MIN_START_HOUR) {
                     continue;
                 }
 
-                if ((int) explode(':', $endSlot['end_time'])[0] > self::WORK_END_HOUR) {
+                $endHour = (int) explode(':', $endSlot['end_time'])[0];
+                $endMin = (int) explode(':', $endSlot['end_time'])[1];
+                if ($endHour > self::MAX_END_HOUR || ($endHour === self::MAX_END_HOUR && $endMin > 0)) {
                     continue;
                 }
 
@@ -468,11 +473,13 @@ class SchedulingEngine
                         continue;
                     }
 
-                    if ((int) explode(':', $startSlot['start_time'])[0] < self::WORK_START_HOUR) {
+                    if ((int) explode(':', $startSlot['start_time'])[0] < self::MIN_START_HOUR) {
                         continue;
                     }
 
-                    if ((int) explode(':', $endSlot['end_time'])[0] > self::WORK_END_HOUR) {
+                    $endHour = (int) explode(':', $endSlot['end_time'])[0];
+                    $endMin = (int) explode(':', $endSlot['end_time'])[1];
+                    if ($endHour > self::MAX_END_HOUR || ($endHour === self::MAX_END_HOUR && $endMin > 0)) {
                         continue;
                     }
 
@@ -659,11 +666,19 @@ class SchedulingEngine
             return ['penalty' => 0, 'factor' => null];
         }
 
-        $penalty = max(0, (int) round(self::PENALTY_EARLY_MORNING * (1 - ($startHour - self::WORK_START_HOUR) / 2)));
+        if ($startHour < self::WORK_START_HOUR) {
+            // masuk jam 7 dapet ekstra penalti berat (misal base 15 + 25 = 40 poin)
+            $penalty = self::PENALTY_EARLY_MORNING + 25;
+            $label = 'Jam ekstrem terlalu pagi';
+        } else {
+            // masuk jam 8 dapet penalti normal (0-15 poin)
+            $penalty = max(0, (int) round(self::PENALTY_EARLY_MORNING * (1 - ($startHour - self::WORK_START_HOUR) / 2)));
+            $label = 'Jam terlalu pagi';
+        }
 
         return [
             'penalty' => $penalty,
-            'factor' => new CodeFactor(4, 'Jam terlalu pagi', $penalty, [
+            'factor' => new CodeFactor(4, $label, $penalty, [
                 'start_hour' => $startHour,
             ]),
         ];
@@ -678,12 +693,22 @@ class SchedulingEngine
             return ['penalty' => 0, 'factor' => null];
         }
 
-        $hoursBeforeEnd = max(0, (self::WORK_END_HOUR - $endHour) - ($endMinute / 60));
-        $penalty = max(0, min(self::PENALTY_LATE_AFTERNOON, (int) round(self::PENALTY_LATE_AFTERNOON * (1 - $hoursBeforeEnd / 2))));
+        $hoursAfterNormal = ($endHour + ($endMinute / 60)) - self::WORK_END_HOUR;
+
+        if ($hoursAfterNormal <= 0) {
+            // jam 14:00 - 16:00 (normal, max 15 poin)
+            $hoursBeforeEnd = max(0, self::WORK_END_HOUR - ($endHour + ($endMinute / 60)));
+            $penalty = max(0, (int) round(self::PENALTY_LATE_AFTERNOON * (1 - $hoursBeforeEnd / 2)));
+            $label = 'Jam terlalu sore';
+        } else {
+            // lewat dari 16:00 (hajar kelipatan 10 poin tiap jam telat)
+            $penalty = self::PENALTY_LATE_AFTERNOON + (int) round($hoursAfterNormal * 10);
+            $label = 'Jam ekstrem malam';
+        }
 
         return [
             'penalty' => $penalty,
-            'factor' => new CodeFactor(5, 'Jam terlalu sore', $penalty, [
+            'factor' => new CodeFactor(5, $label, $penalty, [
                 'end_time' => $candidate['end_time'],
             ]),
         ];
