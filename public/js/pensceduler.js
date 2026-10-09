@@ -5,7 +5,8 @@ const {
   masterLecturers: BAAK_MASTER_LECTURERS,
   masterStudents: BAAK_MASTER_STUDENTS,
   studentRoster: DUMMY_STUDENTS_ROSTER,
-  systemLogs: BAAK_SYSTEM_LOGS
+  systemLogs: BAAK_SYSTEM_LOGS,
+  recommendationSlots: RECOMMENDATION_SLOTS
 } = window.PENSCEDULER;
 let ALL_RESCHEDULE_REQUESTS = window.PENSCEDULER.rescheduleRequests;
 let DATABASE_SCHEDULES = [];
@@ -281,6 +282,7 @@ function timeToMinutes(value) {
   return hours * 60 + minutes;
 }
 
+// The Blade view ships the default campus rooms so the form stays usable offline; catalog rooms replace them only when present.
 function populateRoomOptions() {
   const select = document.getElementById("reschedule-target-room");
   if (!select || DATABASE_ROOMS.length === 0) return;
@@ -1336,7 +1338,9 @@ function populateRescheduleCourseOptions() {
     titleEl.textContent = isMahasiswa ? "Pengajuan Pindah Jadwal Perkuliahan" : "Pindah Jadwal Perkuliahan";
   }
 
-  const classes = APP_DATA[currentRole].classes || [];
+  const classes = DATABASE_SCHEDULES.length > 0
+    ? DATABASE_SCHEDULES
+    : (APP_DATA[currentRole].classes || []);
 
   select.innerHTML = `<option value="">-- Pilih Matakuliah --</option>` +
     classes.map(c => {
@@ -1374,6 +1378,22 @@ function onRescheduleCourseChange(courseId) {
   if (btnSubmit) btnSubmit.disabled = false;
 }
 
+function renderMockRecommendationSlots(container) {
+  container.innerHTML = RECOMMENDATION_SLOTS.map(s => `
+    <div class="overlay-rec-card" onclick="applyRecommendationSlot('${s.day}', '${s.time}', '${s.room}')">
+      <div class="overlay-rec-header">
+        <span class="overlay-rec-day">${escapeHtml(s.day)}</span>
+        <span class="overlay-rec-badge">${escapeHtml(s.note)}</span>
+      </div>
+      <div class="overlay-rec-time">${escapeHtml(s.time)}</div>
+      <div class="overlay-rec-room">Ruangan: <strong>${escapeHtml(s.room)}</strong></div>
+      <button type="button" class="btn-card-action primary" style="width: 100%; margin-top: 10px;">
+        Pilih Slot Ini &rarr;
+      </button>
+    </div>
+  `).join("");
+}
+
 function requestSystemRecommendations() {
   const modal = document.getElementById("recommendations-overlay-modal");
   const container = document.getElementById("modal-recommendations-container");
@@ -1381,21 +1401,28 @@ function requestSystemRecommendations() {
 
   const courseSelect = document.getElementById("reschedule-course-select");
   const scheduleId = courseSelect?.value;
-  if (!scheduleId || !DATABASE_SCHEDULES.some(item => item.id === scheduleId)) {
-    showToast("Pilih jadwal yang sudah tersimpan di database untuk meminta rekomendasi engine.");
-    return;
-  }
+  const selectedText = scheduleId ? courseSelect.options[courseSelect.selectedIndex].text : "Matakuliah";
+  const useEngine = DATABASE_SCHEDULES.some(item => item.id === scheduleId);
 
   const targetDate = document.getElementById("reschedule-target-date")?.value;
   const scope = document.getElementById("reschedule-scope-select")?.value;
-  if (!targetDate) {
+  if (useEngine && !targetDate) {
     showToast("Tanggal mulai berlaku wajib diisi.");
     return;
   }
 
-  document.getElementById("modal-rec-course-title").textContent = getSchedulingClass(scheduleId)?.title || "Matakuliah";
-  container.innerHTML = '<p class="view-subtitle">Engine sedang menghitung slot dan memeriksa bentrok...</p>';
+  document.getElementById("modal-rec-course-title").textContent = useEngine
+    ? getSchedulingClass(scheduleId).title
+    : selectedText.split("(")[0].trim();
   modal.style.display = "flex";
+
+  // Mock slots keep the form handoff usable when the course is not in the database catalog or the engine is unreachable.
+  if (!useEngine) {
+    renderMockRecommendationSlots(container);
+    return;
+  }
+
+  container.innerHTML = '<p class="view-subtitle">Engine sedang menghitung slot dan memeriksa bentrok...</p>';
 
   fetch("/api/scheduling/evaluate", {
     method: "POST",
@@ -1432,7 +1459,9 @@ function requestSystemRecommendations() {
       });
     });
   }).catch(error => {
-    container.innerHTML = `<p class="view-subtitle">${escapeHtml(error.message)}</p>`;
+    console.error(error);
+    renderMockRecommendationSlots(container);
+    showToast("Engine tidak tersedia; menampilkan slot contoh.");
   });
 }
 
