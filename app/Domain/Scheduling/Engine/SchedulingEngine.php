@@ -6,7 +6,6 @@ use App\Domain\Scheduling\DTO\CodeFactor;
 use App\Domain\Scheduling\DTO\EngineInput;
 use App\Domain\Scheduling\DTO\EngineResult;
 use App\Domain\Scheduling\DTO\RescheduleRequest;
-use App\Domain\Scheduling\DTO\ScheduleDto;
 use App\Domain\Scheduling\DTO\ScheduleOption;
 use App\Domain\Scheduling\DTO\ThinkingStep;
 use App\Domain\Scheduling\Enums\DayOfWeek;
@@ -16,25 +15,41 @@ use Generator;
 class SchedulingEngine
 {
     private const SLOT_DURATION_MINUTES = 50;
+
     private const MINUTES_PER_CREDIT = 50;
+
     private const WORK_START_HOUR = 8;
+
     private const WORK_END_HOUR = 16;
+
     private const MIN_START_HOUR = 7;
+
     private const MAX_END_HOUR = 20;
+
     private const LUNCH_BREAK_START = '12:00';
+
     private const LUNCH_BREAK_END = '13:00';
+
     private const FRIDAY_PRAYER_START = '11:20';
+
     private const MAX_OPTIONS = 10;
 
     private const PENALTY_STUDENT_CONFLICT = 50;
+
     private const PENALTY_LUNCH_PROXIMITY = 15;
+
     private const PENALTY_LECTURER_PROXIMITY = 20;
+
     private const PENALTY_EARLY_MORNING = 15;
+
     private const PENALTY_LATE_AFTERNOON = 15;
+
     private const PENALTY_CAPACITY = 50;
+
     private const PENALTY_SLOT_JUMPING = 10;
 
     private array $steps = [];
+
     private array $timeSlots = [];
 
     public function __construct() {}
@@ -70,7 +85,7 @@ class SchedulingEngine
         ]);
 
         $allCandidates = array_merge($candidates, $candidatesWithJumping);
-        $filteredByRoom = $this->filterByRoom($allCandidates, $input->rooms, $input->totalStudents);
+        $filteredByRoom = $this->filterByRoom($allCandidates, $input->rooms, $input->totalStudents, $allSchedules, $input->targetSchedule->id);
 
         $this->addStep(4, 'Filter ruang', [
             'available_rooms' => count($input->rooms),
@@ -92,9 +107,9 @@ class SchedulingEngine
             'total_scored' => count($scored),
         ]);
 
-        usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
+        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
         $topOptions = array_slice($scored, 0, self::MAX_OPTIONS);
-        $options = array_map(fn($item) => $this->createScheduleOption($item), $topOptions);
+        $options = array_map(fn ($item) => $this->createScheduleOption($item), $topOptions);
 
         $success = count($options) > 0 && $options[0]->score >= 50;
 
@@ -140,7 +155,7 @@ class SchedulingEngine
         yield $this->lastStep();
 
         $allCandidates = array_merge($candidates, $candidatesWithJumping);
-        $filteredByRoom = $this->filterByRoom($allCandidates, $input->rooms, $input->totalStudents);
+        $filteredByRoom = $this->filterByRoom($allCandidates, $input->rooms, $input->totalStudents, $allSchedules, $input->targetSchedule->id);
 
         $this->addStep(4, 'Filter ruang', [
             'available_rooms' => count($input->rooms),
@@ -165,9 +180,9 @@ class SchedulingEngine
         ]);
         yield $this->lastStep();
 
-        usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
+        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
         $topOptions = array_slice($scored, 0, self::MAX_OPTIONS);
-        $options = array_map(fn($item) => $this->createScheduleOption($item), $topOptions);
+        $options = array_map(fn ($item) => $this->createScheduleOption($item), $topOptions);
 
         $success = count($options) > 0 && $options[0]->score >= 50;
 
@@ -191,40 +206,40 @@ class SchedulingEngine
         array $allStudentSubjects
     ): ?array {
         $targetSchedule = self::findById($schedules, $scheduleId);
-        if (!$targetSchedule) {
+        if (! $targetSchedule) {
             return null;
         }
 
         $subject = self::findById($subjects, $targetSchedule->subjectId);
-        if (!$subject) {
+        if (! $subject) {
             return null;
         }
 
         $enrolledStudents = array_values(array_filter(
             $allStudentSubjects,
-            fn($s) => $s->subjectId === $subject->id
+            fn ($s) => $s->subjectId === $subject->id
         ));
 
         $studentIds = array_values(array_unique(
-            array_map(fn($s) => $s->studentId, $enrolledStudents)
+            array_map(fn ($s) => $s->studentId, $enrolledStudents)
         ));
 
         $allStudentSubjectIds = array_values(array_unique(
-            array_map(fn($s) => $s->subjectId, array_filter(
+            array_map(fn ($s) => $s->subjectId, array_filter(
                 $allStudentSubjects,
-                fn($s) => in_array($s->studentId, $studentIds)
+                fn ($s) => in_array($s->studentId, $studentIds)
             ))
         ));
 
         $studentSchedules = array_values(array_filter(
             $schedules,
-            fn($s) => in_array($s->subjectId, $allStudentSubjectIds)
+            fn ($s) => in_array($s->subjectId, $allStudentSubjectIds)
                 && $s->id !== $targetSchedule->id
         ));
 
         $lecturerSchedules = array_values(array_filter(
             $schedules,
-            fn($s) => $s->lecturerId === $targetSchedule->lecturerId
+            fn ($s) => $s->lecturerId === $targetSchedule->lecturerId
                 && $s->id !== $targetSchedule->id
         ));
 
@@ -256,6 +271,7 @@ class SchedulingEngine
                 return $item;
             }
         }
+
         return null;
     }
 
@@ -288,10 +304,13 @@ class SchedulingEngine
         foreach ($candidates as $candidate) {
             $dayValue = $candidate['day']->value;
             $bitmask = $bitmasks[$dayValue] ?? 0;
+            $jumpedSlots = $candidate['jumped_slots'] ?? [];
 
             $windowMask = 0;
             for ($j = $candidate['start_slot']; $j <= $candidate['end_slot']; $j++) {
-                $windowMask |= (1 << $j);
+                if (! in_array($j, $jumpedSlots, true)) {
+                    $windowMask |= (1 << $j);
+                }
             }
 
             if (($bitmask & $windowMask) === 0) {
@@ -346,17 +365,7 @@ class SchedulingEngine
             foreach ($lecturerSchedules as $schedule) {
                 if ($schedule->day === $day->value) {
                     for ($i = $schedule->startSlot; $i <= $schedule->endSlot; $i++) {
-                        if (!$this->isLunchBreakSlot($this->timeSlots[$i])) {
-                            $bitmask |= (1 << $i);
-                        }
-                    }
-                }
-            }
-
-            foreach ($allSchedules as $schedule) {
-                if ($schedule->id !== $targetScheduleId && $schedule->roomId === $roomId && $schedule->day === $day->value) {
-                    for ($i = $schedule->startSlot; $i <= $schedule->endSlot; $i++) {
-                        if (!$this->isLunchBreakSlot($this->timeSlots[$i])) {
+                        if (! $this->isLunchBreakSlot($this->timeSlots[$i])) {
                             $bitmask |= (1 << $i);
                         }
                     }
@@ -499,18 +508,39 @@ class SchedulingEngine
         return $candidates;
     }
 
-    private function filterByRoom(array $candidates, array $rooms, int $totalStudents): array
+    private function filterByRoom(array $candidates, array $rooms, int $totalStudents, array $allSchedules, string $targetScheduleId): array
     {
         $filtered = [];
 
         foreach ($candidates as $candidate) {
             foreach ($rooms as $room) {
                 if ($room->capacity >= $totalStudents) {
-                    $filtered[] = array_merge($candidate, [
-                        'room_id' => $room->id,
-                        'room_name' => $room->name,
-                        'room_capacity' => $room->capacity,
-                    ]);
+                    $isRoomFree = true;
+
+                    foreach ($allSchedules as $schedule) {
+                        if ($schedule->id !== $targetScheduleId &&
+                            $schedule->roomId === $room->id &&
+                            $schedule->day === $candidate['day']->value) {
+
+                            if ($this->slotsOverlap(
+                                $candidate['start_slot'],
+                                $candidate['end_slot'],
+                                $schedule->startSlot,
+                                $schedule->endSlot
+                            )) {
+                                $isRoomFree = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($isRoomFree) {
+                        $filtered[] = array_merge($candidate, [
+                            'room_id' => $room->id,
+                            'room_name' => $room->name,
+                            'room_capacity' => $room->capacity,
+                        ]);
+                    }
                 }
             }
         }
@@ -574,7 +604,7 @@ class SchedulingEngine
             )) {
                 $studentsInSubject = $input->getStudentsForSubject($schedule->subjectId);
                 foreach ($studentsInSubject as $studentId) {
-                    if (in_array($studentId, $studentIds) && !in_array($studentId, $conflictStudentIds)) {
+                    if (in_array($studentId, $studentIds) && ! in_array($studentId, $conflictStudentIds)) {
                         $conflictStudentIds[] = $studentId;
                     }
                 }
@@ -736,7 +766,7 @@ class SchedulingEngine
 
     private function calculateSlotJumpingPenalty(array $candidate): array
     {
-        if (!$candidate['has_jumping'] || count($candidate['jumped_slots']) === 0) {
+        if (! $candidate['has_jumping'] || count($candidate['jumped_slots']) === 0) {
             return ['penalty' => 0, 'factor' => null];
         }
 
@@ -758,6 +788,7 @@ class SchedulingEngine
                 return $slot['slot_index'];
             }
         }
+
         return 0;
     }
 

@@ -23,7 +23,7 @@ beforeEach(function () {
         'is_active' => true,
     ]);
 
-    $this->engine = new SchedulingEngine();
+    $this->engine = new SchedulingEngine;
 });
 
 test('engine detects student conflicts correctly', function () {
@@ -33,7 +33,10 @@ test('engine detects student conflicts correctly', function () {
         target: '2026-03-16',
     );
 
-    $rooms = [new RoomDto(id: '1', name: 'Ruang A', capacity: 40)];
+    $rooms = [
+        new RoomDto(id: '1', name: 'Ruang A', capacity: 40),
+        new RoomDto(id: '2', name: 'Ruang B', capacity: 40),
+    ];
 
     $subjects = [
         new SubjectDto(id: '1', name: 'Matematika', credits: 2, lecturerId: '1'),
@@ -73,9 +76,25 @@ test('engine detects student conflicts correctly', function () {
             endSlot: 1,
             subjectId: '2',
             lecturerId: '2',
-            roomId: '1',
+            roomId: '2',
         ),
     ];
+
+    // Leave only the Monday 07:00 candidate open; test conflict scoring independently
+    // from room occupancy and top-option truncation.
+    $blockerId = 3;
+    for ($day = 0; $day <= 6; $day++) {
+        $startSlot = $day === 0 ? 2 : 0;
+        $schedules[] = new ScheduleDto(
+            id: (string) $blockerId++,
+            day: $day,
+            startSlot: $startSlot,
+            endSlot: 14,
+            subjectId: '3',
+            lecturerId: '1',
+            roomId: '9',
+        );
+    }
 
     $buildResult = $this->buildEngineInput('1', $rooms, $schedules, $subjects, $studentSubjects);
     $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
@@ -86,9 +105,9 @@ test('engine detects student conflicts correctly', function () {
     dump('Conflicting schedule: day 0, slot 0-1 (same as candidate)');
     dump('');
     dump('Input details:');
-    dump('  lecturer_schedules_count: ' . count($buildResult['input']->lecturerSchedules));
-    dump('  student_schedules_count: ' . count($buildResult['input']->studentSchedules));
-    dump('  studentIds: ' . json_encode($buildResult['input']->studentIds));
+    dump('  lecturer_schedules_count: '.count($buildResult['input']->lecturerSchedules));
+    dump('  student_schedules_count: '.count($buildResult['input']->studentSchedules));
+    dump('  studentIds: '.json_encode($buildResult['input']->studentIds));
     dump('');
     dump('All options:');
     foreach ($result->options as $i => $option) {
@@ -105,7 +124,7 @@ test('engine detects student conflicts correctly', function () {
                     $conflictFound = true;
                     dump("  Option: {$option->day->label()} {$option->startTime}-{$option->endTime}");
                     dump("    Code 1: {$cf->label} (-{$cf->penalty})");
-                    dump("    Conflicted students: " . json_encode($cf->details['student_ids']));
+                    dump('    Conflicted students: '.json_encode($cf->details['student_ids']));
                     dump("    Conflict count: {$cf->details['count']} / 4 students");
                     expect($cf->details['count'])->toBe(2);
                     expect($cf->details['student_ids'])->toContain('101');
