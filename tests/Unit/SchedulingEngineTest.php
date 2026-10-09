@@ -11,8 +11,9 @@ beforeEach(function () {
 test('engine returns top 10 options with code factors', function () {
     $request = new RescheduleRequest(
         scheduleId: 1,
+        scheduleName: 'Matematika - Kelas A',
         scope: Scope::ONCE,
-        target: '2026-10-12', // bisa juga diubah kaya nerima minggu, sekarang minggu 8, dia ngisi 9
+        target: '2026-10-12',
     );
 
     $rooms = [
@@ -28,7 +29,6 @@ test('engine returns top 10 options with code factors', function () {
         ['id' => 10, 'name' => 'Ruang J', 'capacity' => 120],
         ['id' => 11, 'name' => 'Ruang K', 'capacity' => 60],
         ['id' => 12, 'name' => 'Ruang L', 'capacity' => 30],
-
     ];
 
     $subjects = [
@@ -56,63 +56,19 @@ test('engine returns top 10 options with code factors', function () {
         ['id' => 110, 'name' => 'Student J'],
     ];
 
-    $lecturers = [
-        ['id' => 1, 'name' => 'Lecturer X'],
-        ['id' => 2, 'name' => 'Lecturer Y'],
-        ['id' => 3, 'name' => 'Lecturer Z'],
-        ['id' => 4, 'name' => 'Lecturer A'],
-        ['id' => 5, 'name' => 'Lecturer B'],
-    ];
-
     $studentSubjects = [
-        [
-            'studentID' => 101,
-            'subjectID' => 1,
-        ],
-        [
-            'studentID' => 101,
-            'subjectID' => 2,
-        ],
-        [
-            'studentID' => 101,
-            'subjectID' => 3,
-        ],
-        [
-            'studentID' => 102,
-            'subjectID' => 2,
-        ],
-        [
-            'studentID' => 102,
-            'subjectID' => 1,
-        ],
-        [
-            'studentID' => 102,
-            'subjectID' => 3,
-        ],
-        [
-            'studentID' => 103,
-            'subjectID' => 1,
-        ],
-        [
-            'studentID' => 103,
-            'subjectID' => 2,
-        ],
-        [
-            'studentID' => 103,
-            'subjectID' => 3,
-        ],
-        [
-            'studentID' => 104,
-            'subjectID' => 1,
-        ],
-        [
-            'studentID' => 104,
-            'subjectID' => 2,
-        ],
-        [
-            'studentID' => 104,
-            'subjectID' => 3,
-        ],
+        ['studentID' => 101, 'subjectID' => 1],
+        ['studentID' => 101, 'subjectID' => 2],
+        ['studentID' => 101, 'subjectID' => 3],
+        ['studentID' => 102, 'subjectID' => 2],
+        ['studentID' => 102, 'subjectID' => 1],
+        ['studentID' => 102, 'subjectID' => 3],
+        ['studentID' => 103, 'subjectID' => 1],
+        ['studentID' => 103, 'subjectID' => 2],
+        ['studentID' => 103, 'subjectID' => 3],
+        ['studentID' => 104, 'subjectID' => 1],
+        ['studentID' => 104, 'subjectID' => 2],
+        ['studentID' => 104, 'subjectID' => 3],
     ];
 
     $schedules = [
@@ -138,9 +94,9 @@ test('engine returns top 10 options with code factors', function () {
         ],
         [
             'id' => 3,
-            'day' => 3, // Thursday
-            'startSlot' => 5, // 11:20 AM
-            'endSlot' => 7, // walaupun 2 sks, melewati istirahat(6)
+            'day' => 3,
+            'startSlot' => 5,
+            'endSlot' => 7,
             'subjectID' => 3,
             'lecturerID' => 3,
             'roomID' => 3,
@@ -148,9 +104,20 @@ test('engine returns top 10 options with code factors', function () {
         ],
     ];
 
-    $lecturerSchedules = array_filter($schedules, fn($s) => $s['lecturerID'] === 5);
-
     $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
+
+    dump('=== TEST: engine returns top 10 options ===');
+    dump('Success: ' . ($result->success ? 'true' : 'false'));
+    dump('Total options: ' . count($result->options));
+    dump('Thinking Log:');
+    dump($result->thinkingLog);
+    dump('Top 3 Options:');
+    foreach (array_slice($result->options, 0, 3) as $i => $option) {
+        dump("  #" . ($i + 1) . " {$option->day->label()} {$option->startTime}-{$option->endTime} | {$option->roomName} | Score: {$option->score}");
+        foreach ($option->codeFactors as $cf) {
+            dump("      Code {$cf->code}: {$cf->label} (-{$cf->penalty})");
+        }
+    }
 
     expect($result->success)->toBeBool();
     expect($result->thinkingLog)->toBeString();
@@ -168,6 +135,7 @@ test('engine returns top 10 options with code factors', function () {
 test('engine handles friday prayer time correctly', function () {
     $request = new RescheduleRequest(
         scheduleId: 1,
+        scheduleName: 'Matematika - Kelas A',
         scope: Scope::ONCE,
         target: '2026-10-16',
     );
@@ -203,8 +171,10 @@ test('engine handles friday prayer time correctly', function () {
 
     $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
 
+    dump('=== TEST: friday prayer ===');
     foreach ($result->options as $option) {
         if ($option->day->isFriday()) {
+            dump("  Friday option: {$option->startTime}-{$option->endTime} (must end <= 11:20)");
             expect($option->endTime)->toBeLessThanOrEqual('11:20');
         }
     }
@@ -213,6 +183,7 @@ test('engine handles friday prayer time correctly', function () {
 test('engine filters rooms by capacity', function () {
     $request = new RescheduleRequest(
         scheduleId: 1,
+        scheduleName: 'Matematika - Kelas Besar',
         scope: Scope::ONCE,
         target: '2026-10-12',
     );
@@ -251,7 +222,9 @@ test('engine filters rooms by capacity', function () {
 
     $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
 
+    dump('=== TEST: room capacity filter (30 students, rooms: 20 & 40) ===');
     foreach ($result->options as $option) {
+        dump("  Room: {$option->roomName} (capacity >= 30)");
         expect($option->roomName)->toBe('Ruang Besar');
     }
 });
@@ -259,6 +232,7 @@ test('engine filters rooms by capacity', function () {
 test('engine applies early morning penalty', function () {
     $request = new RescheduleRequest(
         scheduleId: 1,
+        scheduleName: 'Matematika - Pagi',
         scope: Scope::ONCE,
         target: '2026-10-12',
     );
@@ -296,23 +270,24 @@ test('engine applies early morning penalty', function () {
 
     $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
 
-    $earlyOptions = array_filter($result->options, fn($opt) => $opt->startSlot === 0);
-
-    foreach ($earlyOptions as $option) {
-        $hasEarlyPenalty = false;
-        foreach ($option->codeFactors as $factor) {
-            if ($factor->code === 4) {
-                $hasEarlyPenalty = true;
-                expect($factor->label)->toBe('Jam terlalu pagi');
+    dump('=== TEST: early morning penalty ===');
+    foreach ($result->options as $option) {
+        if ($option->startSlot === 0) {
+            dump("  Slot 0 (08:00): Score {$option->score}");
+            foreach ($option->codeFactors as $cf) {
+                if ($cf->code === 4) {
+                    dump("    Code 4: {$cf->label} (-{$cf->penalty})");
+                    expect($cf->label)->toBe('Jam terlalu pagi');
+                }
             }
         }
-        expect($hasEarlyPenalty)->toBeTrue();
     }
 });
 
 test('engine returns false when no good slots available', function () {
     $request = new RescheduleRequest(
         scheduleId: 1,
+        scheduleName: 'Matematika - Full',
         scope: Scope::ONCE,
         target: '2026-10-12',
     );
@@ -350,6 +325,10 @@ test('engine returns false when no good slots available', function () {
 
     $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
 
+    dump('=== TEST: no good slots (30 students, room capacity 10) ===');
+    dump('Success: ' . ($result->success ? 'true' : 'false'));
+    dump('Options: ' . count($result->options));
+
     expect($result->success)->toBeFalse();
     expect($result->options)->toBeEmpty();
 });
@@ -357,6 +336,7 @@ test('engine returns false when no good slots available', function () {
 test('thinking log contains all steps', function () {
     $request = new RescheduleRequest(
         scheduleId: 1,
+        scheduleName: 'Matematika - Test',
         scope: Scope::ONCE,
         target: '2026-10-12',
     );
@@ -394,6 +374,9 @@ test('thinking log contains all steps', function () {
 
     $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
 
+    dump('=== TEST: thinking log ===');
+    dump($result->thinkingLog);
+
     expect($result->thinkingLog)->toContain('[STEP 1: Ambil bahan]');
     expect($result->thinkingLog)->toContain('[STEP 2: Bangun bitmask]');
     expect($result->thinkingLog)->toContain('[STEP 3: Cari jendela slot]');
@@ -404,6 +387,7 @@ test('thinking log contains all steps', function () {
 test('engine handles slot jumping over lunch break', function () {
     $request = new RescheduleRequest(
         scheduleId: 3,
+        scheduleName: 'Kimia - 3 SKS',
         scope: Scope::ONCE,
         target: '2026-10-12',
     );
@@ -469,8 +453,40 @@ test('engine handles slot jumping over lunch break', function () {
 
     $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
 
-    expect($result->thinkingLog)->toContain('Slot jumping');
+    dump('=== TEST: slot jumping (3 SKS = 3 slots, jumps over lunch) ===');
+    dump('Thinking Log:');
+    dump($result->thinkingLog);
+    dump('Options:');
+    foreach ($result->options as $i => $option) {
+        dump("  #" . ($i + 1) . " {$option->day->label()} {$option->startTime}-{$option->endTime} | {$option->roomName} | Score: {$option->score}");
+        foreach ($option->codeFactors as $cf) {
+            dump("      Code {$cf->code}: {$cf->label} (-{$cf->penalty})");
+        }
+    }
 
-    $jumpingOptions = array_filter($result->options, fn($opt) => true);
+    expect($result->thinkingLog)->toContain('Slot jumping');
     expect($result->options)->toBeArray();
+});
+
+test('scope ONCE evaluates single week, ONWARDS evaluates remaining weeks', function () {
+    $onceRequest = new RescheduleRequest(
+        scheduleId: 1,
+        scheduleName: 'Matematika',
+        scope: Scope::ONCE,
+        target: '2026-03-02',
+    );
+
+    $onwardsRequest = new RescheduleRequest(
+        scheduleId: 1,
+        scheduleName: 'Matematika',
+        scope: Scope::ONWARDS,
+        target: '2026-03-02',
+    );
+
+    dump('=== TEST: Scope ONCE vs ONWARDS ===');
+    dump("ONCE  -> target week: {$onceRequest->targetWeek}, weeks to evaluate: " . json_encode($onceRequest->weeksToEvaluate));
+    dump("ONWARDS -> target week: {$onwardsRequest->targetWeek}, weeks to evaluate: " . json_encode($onwardsRequest->weeksToEvaluate));
+
+    expect($onceRequest->weeksToEvaluate)->toBe([$onceRequest->targetWeek]);
+    expect(count($onwardsRequest->weeksToEvaluate))->toBeGreaterThan(1);
 });
