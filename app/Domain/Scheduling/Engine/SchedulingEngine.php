@@ -8,6 +8,7 @@ use App\Domain\Scheduling\DTO\EngineResult;
 use App\Domain\Scheduling\DTO\RescheduleRequest;
 use App\Domain\Scheduling\DTO\ScheduleOption;
 use App\Domain\Scheduling\Enums\DayOfWeek;
+use App\Domain\Scheduling\Enums\Scope;
 
 class SchedulingEngine
 {
@@ -52,7 +53,11 @@ class SchedulingEngine
             );
         }
 
-        $this->logStep(1, 'Ambil bahan', $input->toArray());
+        $this->logStep(1, 'Ambil bahan', array_merge($input->toArray(), [
+            'scope' => $request->scope->value,
+            'target_week' => $request->targetWeek,
+            'weeks_to_evaluate' => $request->weeksToEvaluate,
+        ]));
 
         $timeSlots = $this->generateTimeSlots();
 
@@ -88,6 +93,15 @@ class SchedulingEngine
             'after_filter' => count($filteredByRoom),
         ]);
 
+        if ($request->scope === Scope::ONWARDS) {
+            $filteredByRoom = $this->verifyOnwardsPattern($filteredByRoom, $bitmasks, $request->weeksToEvaluate);
+
+            $this->logStep('4b', 'Verifikasi pola mingguan (ONWARDS)', [
+                'weeks_checked' => count($request->weeksToEvaluate),
+                'after_verification' => count($filteredByRoom),
+            ]);
+        }
+
         $scored = $this->scoreOptions(
             $filteredByRoom,
             $input->enrolledStudentIds,
@@ -113,6 +127,28 @@ class SchedulingEngine
             thinkingLog: implode("\n\n", $this->thinkingLog),
             options: $options,
         );
+    }
+
+    private function verifyOnwardsPattern(array $candidates, array $bitmasks, array $weeksToEvaluate): array
+    {
+        $verified = [];
+
+        foreach ($candidates as $candidate) {
+            $dayValue = $candidate['day']->value;
+            $bitmask = $bitmasks[$dayValue] ?? 0;
+
+            $windowMask = 0;
+            for ($j = $candidate['start_slot']; $j <= $candidate['end_slot']; $j++) {
+                $windowMask |= (1 << $j);
+            }
+
+            if (($bitmask & $windowMask) === 0) {
+                $candidate['verified_weeks'] = $weeksToEvaluate;
+                $verified[] = $candidate;
+            }
+        }
+
+        return $verified;
     }
 
     private function getInputEngine(
