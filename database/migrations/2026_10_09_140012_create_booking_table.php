@@ -14,11 +14,16 @@ return new class extends Migration
         Schema::create('booking', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('scheduleId');
+            $table->integer('day');
+            $table->integer('startSlot');
+            $table->integer('endSlot');
+            $table->uuid('roomId');
             $table->timestamps();
             $table->softDeletes();
             
-            // Foreign key constraint
+            // Foreign key constraints
             $table->foreign('scheduleId')->references('id')->on('schedule');
+            $table->foreign('roomId')->references('id')->on('room');
         });
     }
 

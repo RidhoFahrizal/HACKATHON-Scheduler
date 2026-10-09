@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('room', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->string('name');
+            $table->integer('capacity');
             $table->timestamps();
             $table->softDeletes();
         });

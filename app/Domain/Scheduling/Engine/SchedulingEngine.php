@@ -102,13 +102,17 @@ class SchedulingEngine
             ]);
         }
 
+        $lecturerId = is_array($input->targetSchedule) 
+            ? ($input->targetSchedule['lecturerID'] ?? null) 
+            : ($input->targetSchedule->lecturerId ?? null);
+
         $scored = $this->scoreOptions(
             $filteredByRoom,
             $input->enrolledStudentIds,
             $input->totalStudents,
             $timeSlots,
             $input->lecturerSchedules,
-            $input->targetSchedule['lecturerID']
+            $lecturerId
         );
 
         $this->logStep(5, 'Scoring', [

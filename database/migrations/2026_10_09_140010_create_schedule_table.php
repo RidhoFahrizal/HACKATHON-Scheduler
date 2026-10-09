@@ -11,15 +11,22 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('subject', function (Blueprint $table) {
+        Schema::create('schedule', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('name');
+            $table->integer('day');
+            $table->integer('startSlot');
+            $table->integer('endSlot');
+            $table->uuid('subjectId');
             $table->uuid('lecturerId');
+            $table->uuid('roomId');
+            $table->string('semesterType');
             $table->timestamps();
             $table->softDeletes();
             
             // Foreign key constraints
+            $table->foreign('subjectId')->references('id')->on('subject');
             $table->foreign('lecturerId')->references('id')->on('lecturer');
+            $table->foreign('roomId')->references('id')->on('room');
         });
     }
 
@@ -28,6 +35,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('subject');
+        Schema::dropIfExists('schedule');
     }
 };
