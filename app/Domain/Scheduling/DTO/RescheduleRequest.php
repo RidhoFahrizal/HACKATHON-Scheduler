@@ -11,11 +11,10 @@ class RescheduleRequest
 
     public function __construct(
         public readonly int $scheduleId,
-        public readonly string $scheduleName,
         public readonly Scope $scope,
         public readonly string $target,
     ) {
-        $this->targetWeek = Scope::getWeeksFromDate($target);
+        $this->targetWeek = Scope::getWeekFromDate($target);
         
         $this->weeksToEvaluate = match($scope) {
             Scope::ONCE => [$this->targetWeek],

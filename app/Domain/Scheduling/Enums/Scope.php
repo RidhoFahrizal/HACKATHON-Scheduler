@@ -2,6 +2,8 @@
 
 namespace App\Domain\Scheduling\Enums;
 
+use App\Models\AcademicCalendar;
+
 enum Scope: string
 {
     case ONCE = 'once';
@@ -9,23 +11,16 @@ enum Scope: string
 
     public static function getCurrentWeek(): int
     {
-        $startOfYear = mktime(0, 0, 0, 1, 1, (int) date('Y'));
-        $now = time();
-        return (int) ceil(($now - $startOfYear) / (7 * 24 * 60 * 60));
+        return AcademicCalendar::getCurrentWeek();
     }
 
-    public static function getWeeksFromDate(string $date): int
+    public static function getWeekFromDate(string $date): int
     {
-        $startOfYear = mktime(0, 0, 0, 1, 1, (int) date('Y', strtotime($date)));
-        $target = strtotime($date);
-        return (int) ceil(($target - $startOfYear) / (7 * 24 * 60 * 60));
+        return AcademicCalendar::getWeekFromDate($date);
     }
 
-    public static function getRemainingWeeks(int $fromWeek, int $totalWeeks = 16): array
+    public static function getRemainingWeeks(int $fromWeek): array
     {
-        if ($fromWeek > $totalWeeks) {
-            return [$fromWeek];
-        }
-        return range($fromWeek, $totalWeeks);
+        return AcademicCalendar::getRemainingWeeks($fromWeek);
     }
 }

@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             SchedulingConfigSeeder::class,
+            AcademicCalendarSeeder::class,
         ]);
 
         User::factory()->create([
