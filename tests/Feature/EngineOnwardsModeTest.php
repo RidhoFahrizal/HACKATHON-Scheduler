@@ -24,7 +24,7 @@ beforeEach(function () {
 
 test('engine ONWARDS mode verifies pattern across all remaining weeks', function () {
     $request = new RescheduleRequest(
-        scheduleId: 1,
+        scheduleId: '1',
         scope: Scope::ONWARDS,
         target: '2026-03-16',
     );
@@ -32,10 +32,11 @@ test('engine ONWARDS mode verifies pattern across all remaining weeks', function
     $rooms = $this->getRooms(3, 40);
     $subjects = $this->getSubjects();
     $students = $this->getStudents(4);
-    $studentSubjects = $this->getStudentSubjects(1, $students);
+    $studentSubjects = $this->getStudentSubjects('1', $students);
     $schedules = $this->getBaseSchedules();
 
-    $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
+    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $input);
 
     dump('=== ONWARDS MODE: VERIFY PATTERN ACROSS ALL REMAINING WEEKS ===');
     dump('Scope: ONWARDS');
@@ -62,7 +63,7 @@ test('engine ONWARDS mode verifies pattern across all remaining weeks', function
 
 test('engine ONCE mode does not verify across weeks', function () {
     $request = new RescheduleRequest(
-        scheduleId: 1,
+        scheduleId: '1',
         scope: Scope::ONCE,
         target: '2026-03-16',
     );
@@ -70,10 +71,11 @@ test('engine ONCE mode does not verify across weeks', function () {
     $rooms = $this->getRooms(3, 40);
     $subjects = $this->getSubjects();
     $students = $this->getStudents(4);
-    $studentSubjects = $this->getStudentSubjects(1, $students);
+    $studentSubjects = $this->getStudentSubjects('1', $students);
     $schedules = $this->getBaseSchedules();
 
-    $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
+    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $input);
 
     dump('=== ONCE MODE: SINGLE WEEK ONLY ===');
     dump('Scope: ONCE');

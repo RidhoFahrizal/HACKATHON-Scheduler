@@ -1,6 +1,10 @@
 <?php
 
 use App\Domain\Scheduling\DTO\RescheduleRequest;
+use App\Domain\Scheduling\DTO\RoomDto;
+use App\Domain\Scheduling\DTO\ScheduleDto;
+use App\Domain\Scheduling\DTO\StudentSubjectDto;
+use App\Domain\Scheduling\DTO\SubjectDto;
 use App\Domain\Scheduling\Engine\SchedulingEngine;
 use App\Domain\Scheduling\Enums\Scope;
 use App\Models\AcademicCalendar;
@@ -24,30 +28,30 @@ beforeEach(function () {
 
 test('engine handles friday prayer time correctly', function () {
     $request = new RescheduleRequest(
-        scheduleId: 1,
+        scheduleId: '1',
         scope: Scope::ONCE,
         target: '2026-03-20',
     );
 
-    $rooms = $this->getRooms(1, 40);
-    $subjects = [['id' => 1, 'name' => 'Matematika', 'credits' => 2]];
+    $rooms = [new RoomDto(id: '1', name: 'Ruang A', capacity: 40)];
+    $subjects = [new SubjectDto(id: '1', name: 'Matematika', credits: 2, lecturerId: '1')];
     $students = $this->getStudents(1);
-    $studentSubjects = $this->getStudentSubjects(1, $students);
+    $studentSubjects = $this->getStudentSubjects('1', $students);
 
     $schedules = [
-        [
-            'id' => 1,
-            'day' => 4,
-            'startSlot' => 0,
-            'endSlot' => 1,
-            'subjectID' => 1,
-            'lecturerID' => 1,
-            'roomID' => 1,
-            'bookingID' => 0,
-        ],
+        new ScheduleDto(
+            id: '1',
+            day: 4,
+            startSlot: 0,
+            endSlot: 1,
+            subjectId: '1',
+            lecturerId: '1',
+            roomId: '1',
+        ),
     ];
 
-    $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
+    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $input);
 
     dump('=== FRIDAY PRAYER HANDLING ===');
     foreach ($result->options as $option) {

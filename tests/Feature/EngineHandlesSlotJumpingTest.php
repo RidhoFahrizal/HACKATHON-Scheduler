@@ -1,6 +1,8 @@
 <?php
 
 use App\Domain\Scheduling\DTO\RescheduleRequest;
+use App\Domain\Scheduling\DTO\ScheduleDto;
+use App\Domain\Scheduling\DTO\SubjectDto;
 use App\Domain\Scheduling\Engine\SchedulingEngine;
 use App\Domain\Scheduling\Enums\Scope;
 use App\Models\AcademicCalendar;
@@ -24,7 +26,7 @@ beforeEach(function () {
 
 test('engine handles slot jumping over lunch break', function () {
     $request = new RescheduleRequest(
-        scheduleId: 3,
+        scheduleId: '3',
         scope: Scope::ONCE,
         target: '2026-03-16',
     );
@@ -34,14 +36,15 @@ test('engine handles slot jumping over lunch break', function () {
     $students = $this->getStudents(2);
 
     $studentSubjects = array_merge(
-        $this->getStudentSubjects(1, $students),
-        $this->getStudentSubjects(2, $students),
-        $this->getStudentSubjects(3, $students),
+        $this->getStudentSubjects('1', $students),
+        $this->getStudentSubjects('2', $students),
+        $this->getStudentSubjects('3', $students),
     );
 
     $schedules = $this->getBaseSchedules();
 
-    $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
+    $input = SchedulingEngine::buildInput('3', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $input);
 
     dump('=== SLOT JUMPING (3 SKS = 3 slots, jumps over lunch) ===');
     dump('Thinking Log:');

@@ -1,6 +1,9 @@
 <?php
 
 use App\Domain\Scheduling\DTO\RescheduleRequest;
+use App\Domain\Scheduling\DTO\RoomDto;
+use App\Domain\Scheduling\DTO\ScheduleDto;
+use App\Domain\Scheduling\DTO\SubjectDto;
 use App\Domain\Scheduling\Engine\SchedulingEngine;
 use App\Domain\Scheduling\Enums\Scope;
 use App\Models\AcademicCalendar;
@@ -24,33 +27,30 @@ beforeEach(function () {
 
 test('engine returns false when no good slots available', function () {
     $request = new RescheduleRequest(
-        scheduleId: 1,
+        scheduleId: '1',
         scope: Scope::ONCE,
         target: '2026-03-16',
     );
 
-    $rooms = [
-        ['id' => 1, 'name' => 'Ruang Kecil', 'capacity' => 10],
-    ];
-
-    $subjects = [['id' => 1, 'name' => 'Matematika', 'credits' => 2]];
+    $rooms = [new RoomDto(id: '1', name: 'Ruang Kecil', capacity: 10)];
+    $subjects = [new SubjectDto(id: '1', name: 'Matematika', credits: 2, lecturerId: '5')];
     $students = $this->getStudents(30);
-    $studentSubjects = $this->getStudentSubjects(1, $students);
+    $studentSubjects = $this->getStudentSubjects('1', $students);
 
     $schedules = [
-        [
-            'id' => 1,
-            'day' => 0,
-            'startSlot' => 0,
-            'endSlot' => 1,
-            'subjectID' => 1,
-            'lecturerID' => 5,
-            'roomID' => 1,
-            'bookingID' => 0,
-        ],
+        new ScheduleDto(
+            id: '1',
+            day: 0,
+            startSlot: 0,
+            endSlot: 1,
+            subjectId: '1',
+            lecturerId: '5',
+            roomId: '1',
+        ),
     ];
 
-    $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
+    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $input);
 
     dump('=== NO GOOD SLOTS (30 students, room capacity 10) ===');
     dump('Success: ' . ($result->success ? 'true' : 'false'));

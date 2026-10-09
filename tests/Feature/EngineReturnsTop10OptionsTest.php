@@ -1,6 +1,10 @@
 <?php
 
 use App\Domain\Scheduling\DTO\RescheduleRequest;
+use App\Domain\Scheduling\DTO\RoomDto;
+use App\Domain\Scheduling\DTO\ScheduleDto;
+use App\Domain\Scheduling\DTO\StudentSubjectDto;
+use App\Domain\Scheduling\DTO\SubjectDto;
 use App\Domain\Scheduling\Engine\SchedulingEngine;
 use App\Domain\Scheduling\Enums\Scope;
 use App\Models\AcademicCalendar;
@@ -24,7 +28,7 @@ beforeEach(function () {
 
 test('engine returns top 10 options with code factors', function () {
     $request = new RescheduleRequest(
-        scheduleId: 1,
+        scheduleId: '1',
         scope: Scope::ONCE,
         target: '2026-03-16',
     );
@@ -32,10 +36,11 @@ test('engine returns top 10 options with code factors', function () {
     $rooms = $this->getRooms(12, 30);
     $subjects = $this->getSubjects();
     $students = $this->getStudents(4);
-    $studentSubjects = $this->getStudentSubjects(1, $students);
+    $studentSubjects = $this->getStudentSubjects('1', $students);
     $schedules = $this->getBaseSchedules();
 
-    $result = $this->engine->evaluate($request, $rooms, $schedules, $subjects, $students, $studentSubjects);
+    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $input);
 
     dump('=== ENGINE RETURNS TOP 10 OPTIONS ===');
     dump('Success: ' . ($result->success ? 'true' : 'false'));
