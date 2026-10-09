@@ -115,6 +115,19 @@
                   </div>
 
                   <fieldset id="reschedule-parameters-fieldset" disabled class="reschedule-fieldset">
+                    <div class="form-row-grid">
+                      <div class="form-group">
+                        <label for="reschedule-target-date" class="form-label">Tanggal mulai berlaku</label>
+                        <input id="reschedule-target-date" class="form-select" type="date" value="{{ now()->toDateString() }}">
+                      </div>
+                      <div class="form-group">
+                        <label for="reschedule-scope-select" class="form-label">Cakupan perubahan</label>
+                        <select id="reschedule-scope-select" class="form-select">
+                          <option value="once">Sekali saja</option>
+                          <option value="onwards">Seterusnya sampai akhir semester</option>
+                        </select>
+                      </div>
+                    </div>
                     <div class="form-group">
                       <label for="reschedule-duration-select" class="form-label">2. Durasi Perpindahan Jadwal</label>
                       <select id="reschedule-duration-select" class="form-select">
@@ -153,14 +166,7 @@
                     <div class="form-group">
                       <label for="reschedule-target-room" class="form-label">Ruangan Tujuan</label>
                       <select id="reschedule-target-room" class="form-select">
-                        <option value="Lab C 102">Lab C 102 (Gedung D4 Lt. 1)</option>
-                        <option value="Lab C 103" selected>Lab C 103 (Gedung D4 Lt. 1)</option>
-                        <option value="Lab C 104">Lab C 104 (Gedung D4 Lt. 1)</option>
-                        <option value="Lab C 105">Lab C 105 (Gedung D4 Lt. 1)</option>
-                        <option value="SAW-06.10">SAW-06.10 (Pascasarjana Lt. 6)</option>
-                        <option value="Lab Software SAW-08">Lab Software SAW-08 (Pascasarjana Lt. 8)</option>
-                        <option value="SAW-05.02">SAW-05.02 (Pascasarjana Lt. 5)</option>
-                        <option value="Lab Sinyal B 204">Lab Sinyal B 204 (Gedung D3 Lt. 2)</option>
+                        <option value="">Memuat data ruang...</option>
                       </select>
                     </div>
                   </fieldset>
