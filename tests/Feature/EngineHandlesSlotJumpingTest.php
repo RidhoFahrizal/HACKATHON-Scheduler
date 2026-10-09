@@ -73,7 +73,7 @@ test('onwards scope keeps slot-jumping options when teaching slots are free', fu
     $studentSubjects = $this->getStudentSubjects('3', $students);
     $schedules = $this->getBaseSchedules();
 
-    // Leave slots 5, 8 and 9 open on each weekday; slots 6 and 7 cover lunch.
+    // Leave teaching slots on both sides of the single lunch slot.
     $blockerId = 10;
     foreach (range(0, 6) as $day) {
         $schedules[] = new ScheduleDto(
@@ -102,4 +102,86 @@ test('onwards scope keeps slot-jumping options when teaching slots are free', fu
         ->contains(fn ($option) => collect($option->codeFactors)->contains(fn ($factor) => $factor->code === 7));
 
     expect($hasSlotJumpingOption)->toBeTrue();
+});
+
+test('slot-jumping candidate never starts inside the lunch break', function () {
+    $request = new RescheduleRequest(
+        scheduleId: '3',
+        scope: Scope::ONCE,
+        target: '2026-03-16',
+    );
+
+    $rooms = $this->getRooms(1, 40);
+    $subjects = $this->getSubjects();
+    $students = $this->getStudents(2);
+    $studentSubjects = $this->getStudentSubjects('3', $students);
+    $schedules = $this->getBaseSchedules();
+
+    // Keep only the lunch slot and teaching slots after it free.
+    $blockerId = 20;
+    foreach (range(0, 6) as $day) {
+        $schedules[] = new ScheduleDto(
+            id: (string) $blockerId++,
+            day: $day,
+            startSlot: 0,
+            endSlot: 5,
+            subjectId: '99',
+            lecturerId: '3',
+            roomId: '99',
+        );
+        $schedules[] = new ScheduleDto(
+            id: (string) $blockerId++,
+            day: $day,
+            startSlot: 12,
+            endSlot: 14,
+            subjectId: '99',
+            lecturerId: '3',
+            roomId: '99',
+        );
+    }
+
+    $buildResult = $this->buildEngineInput('3', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
+
+    expect(array_filter($result->options, fn ($option) => in_array($option->startTime, ['12:00', '12:50'], true)))->toBeEmpty();
+});
+
+test('slot jumping treats lunch as one hour and resumes at 13:00', function () {
+    $request = new RescheduleRequest(
+        scheduleId: '3',
+        scope: Scope::ONCE,
+        target: '2026-03-16',
+    );
+
+    $rooms = $this->getRooms(1, 40);
+    $subjects = $this->getSubjects();
+    $students = $this->getStudents(2);
+    $studentSubjects = $this->getStudentSubjects('3', $students);
+    $schedules = $this->getBaseSchedules();
+
+    $blockerId = 30;
+    foreach (range(0, 6) as $day) {
+        $ranges = $day === 0 ? [[0, 4], [9, 14]] : [[0, 14]];
+        foreach ($ranges as [$startSlot, $endSlot]) {
+            $schedules[] = new ScheduleDto(
+                id: (string) $blockerId++,
+                day: $day,
+                startSlot: $startSlot,
+                endSlot: $endSlot,
+                subjectId: '99',
+                lecturerId: '3',
+                roomId: '99',
+            );
+        }
+    }
+
+    $buildResult = $this->buildEngineInput('3', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
+    $jumpFactor = collect($result->options[0]->codeFactors)->first(fn ($factor) => $factor->code === 7);
+
+    expect($result->options)->toHaveCount(1)
+        ->and($result->options[0]->startTime)->toBe('11:10')
+        ->and($result->options[0]->endTime)->toBe('14:40')
+        ->and($jumpFactor)->not->toBeNull()
+        ->and($jumpFactor->details['count'])->toBe(1);
 });

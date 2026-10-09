@@ -3,7 +3,6 @@
 use App\Domain\Scheduling\DTO\RescheduleRequest;
 use App\Domain\Scheduling\DTO\RoomDto;
 use App\Domain\Scheduling\DTO\ScheduleDto;
-use App\Domain\Scheduling\DTO\StudentSubjectDto;
 use App\Domain\Scheduling\DTO\SubjectDto;
 use App\Domain\Scheduling\Engine\SchedulingEngine;
 use App\Domain\Scheduling\Enums\Scope;
@@ -23,7 +22,7 @@ beforeEach(function () {
         'is_active' => true,
     ]);
 
-    $this->engine = new SchedulingEngine();
+    $this->engine = new SchedulingEngine;
 });
 
 test('engine handles friday prayer time correctly', function () {
@@ -50,14 +49,26 @@ test('engine handles friday prayer time correctly', function () {
         ),
     ];
 
+    foreach ([0, 1, 2, 3, 5, 6] as $day) {
+        $schedules[] = new ScheduleDto(
+            id: 'blocker-'.$day,
+            day: $day,
+            startSlot: 0,
+            endSlot: 14,
+            subjectId: '99',
+            lecturerId: '1',
+            roomId: '99',
+        );
+    }
+
     $buildResult = $this->buildEngineInput('1', $rooms, $schedules, $subjects, $studentSubjects);
     $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
 
     dump('=== FRIDAY PRAYER HANDLING ===');
-    foreach ($result->options as $option) {
-        if ($option->day->isFriday()) {
-            dump("  Friday option: {$option->startTime}-{$option->endTime} (must end <= 11:20)");
-            expect($option->endTime)->toBeLessThanOrEqual('11:20');
-        }
+    $fridayOptions = array_values(array_filter($result->options, fn ($option) => $option->day->isFriday()));
+
+    expect($fridayOptions)->not->toBeEmpty();
+    foreach ($fridayOptions as $option) {
+        expect($option->endTime)->toBeLessThanOrEqual('11:20');
     }
 });

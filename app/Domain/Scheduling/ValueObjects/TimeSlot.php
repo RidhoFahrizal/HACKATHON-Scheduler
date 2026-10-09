@@ -2,6 +2,8 @@
 
 namespace App\Domain\Scheduling\ValueObjects;
 
+use OutOfBoundsException;
+
 class TimeSlot
 {
     public function __construct(
@@ -25,20 +27,20 @@ class TimeSlot
         return (int) explode(':', $this->endTime)[1];
     }
 
-    public static function fromIndex(int $index, int $slotDurationMinutes = 50): self
-    {
-        $startMinutes = 8 * 60 + ($index * $slotDurationMinutes);
-        $endMinutes = $startMinutes + $slotDurationMinutes;
+    public static function fromIndex(
+        int $index,
+        int $slotDurationMinutes = 50,
+        int $startHour = 7,
+        int $endHour = 20,
+        string $lunchStart = '12:00',
+        string $lunchEnd = '13:00',
+    ): self {
+        $slot = TimeSlotGrid::generate($slotDurationMinutes, $startHour, $endHour, $lunchStart, $lunchEnd)[$index] ?? null;
 
-        $startHour = intdiv($startMinutes, 60);
-        $startMin = $startMinutes % 60;
-        $endHour = intdiv($endMinutes, 60);
-        $endMin = $endMinutes % 60;
+        if ($slot === null) {
+            throw new OutOfBoundsException("Slot index {$index} is outside the configured time grid.");
+        }
 
-        return new self(
-            index: $index,
-            startTime: sprintf('%02d:%02d', $startHour, $startMin),
-            endTime: sprintf('%02d:%02d', $endHour, $endMin),
-        );
+        return new self($index, $slot['start_time'], $slot['end_time']);
     }
 }

@@ -5,58 +5,33 @@ namespace App\Domain\Scheduling\Engine;
 use App\Domain\Scheduling\DTO\CodeFactor;
 use App\Domain\Scheduling\DTO\EngineInput;
 use App\Domain\Scheduling\DTO\EngineResult;
+use App\Domain\Scheduling\DTO\EngineRules;
 use App\Domain\Scheduling\DTO\RescheduleRequest;
 use App\Domain\Scheduling\DTO\ScheduleOption;
 use App\Domain\Scheduling\DTO\ThinkingStep;
 use App\Domain\Scheduling\Enums\DayOfWeek;
 use App\Domain\Scheduling\Enums\Scope;
+use App\Domain\Scheduling\ValueObjects\TimeSlotGrid;
 use Generator;
 
 class SchedulingEngine
 {
-    private const SLOT_DURATION_MINUTES = 50;
-
-    private const MINUTES_PER_CREDIT = 50;
-
-    private const WORK_START_HOUR = 8;
-
-    private const WORK_END_HOUR = 16;
-
-    private const MIN_START_HOUR = 7;
-
-    private const MAX_END_HOUR = 20;
-
-    private const LUNCH_BREAK_START = '12:00';
-
-    private const LUNCH_BREAK_END = '13:00';
-
-    private const FRIDAY_PRAYER_START = '11:20';
-
-    private const MAX_OPTIONS = 10;
-
-    private const PENALTY_STUDENT_CONFLICT = 50;
-
-    private const PENALTY_LUNCH_PROXIMITY = 15;
-
-    private const PENALTY_LECTURER_PROXIMITY = 20;
-
-    private const PENALTY_EARLY_MORNING = 15;
-
-    private const PENALTY_LATE_AFTERNOON = 15;
-
-    private const PENALTY_CAPACITY = 50;
-
-    private const PENALTY_SLOT_JUMPING = 10;
+    private EngineRules $rules;
 
     private array $steps = [];
 
     private array $timeSlots = [];
 
-    public function __construct() {}
-
-    public function evaluate(RescheduleRequest $request, EngineInput $input, array $allSchedules = []): EngineResult
+    public function __construct()
     {
+        $this->rules = new EngineRules;
+    }
+
+    public function evaluate(RescheduleRequest $request, EngineInput $input, array $allSchedules): EngineResult
+    {
+        $this->assertTargetMatchesInput($request, $input);
         $this->steps = [];
+        $this->rules = $input->rules;
         $this->timeSlots = $this->generateTimeSlots();
 
         $this->addStep(1, 'Ambil bahan', array_merge($input->toArray(), [
@@ -65,7 +40,8 @@ class SchedulingEngine
             'weeks_to_evaluate' => $request->weeksToEvaluate,
         ]));
 
-        $bitmasks = $this->buildBitmasks($input->lecturerSchedules, $input->studentSchedules, $allSchedules, $input->targetSchedule->id, $input->targetSchedule->roomId);
+        $this->assertSchedulesFitGrid(array_merge($input->lecturerSchedules, $input->studentSchedules, $allSchedules));
+        $bitmasks = $this->buildBitmasks($input->lecturerSchedules);
 
         $this->addStep(2, 'Bangun bitmask', [
             'total_days' => count($bitmasks),
@@ -107,11 +83,11 @@ class SchedulingEngine
             'total_scored' => count($scored),
         ]);
 
-        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
-        $topOptions = array_slice($scored, 0, self::MAX_OPTIONS);
+        usort($scored, fn ($a, $b) => $this->compareScoredOptions($a, $b));
+        $topOptions = array_slice($scored, 0, $this->rules->maxOptions);
         $options = array_map(fn ($item) => $this->createScheduleOption($item), $topOptions);
 
-        $success = count($options) > 0 && $options[0]->score >= 50;
+        $success = count($options) > 0 && $options[0]->score >= $this->rules->minimumSuccessScore;
 
         return new EngineResult(
             success: $success,
@@ -120,9 +96,11 @@ class SchedulingEngine
         );
     }
 
-    public function evaluateStream(RescheduleRequest $request, EngineInput $input, array $allSchedules = []): Generator
+    public function evaluateStream(RescheduleRequest $request, EngineInput $input, array $allSchedules): Generator
     {
+        $this->assertTargetMatchesInput($request, $input);
         $this->steps = [];
+        $this->rules = $input->rules;
         $this->timeSlots = $this->generateTimeSlots();
 
         $this->addStep(1, 'Ambil bahan', array_merge($input->toArray(), [
@@ -132,7 +110,8 @@ class SchedulingEngine
         ]));
         yield $this->lastStep();
 
-        $bitmasks = $this->buildBitmasks($input->lecturerSchedules, $input->studentSchedules, $allSchedules, $input->targetSchedule->id, $input->targetSchedule->roomId);
+        $this->assertSchedulesFitGrid(array_merge($input->lecturerSchedules, $input->studentSchedules, $allSchedules));
+        $bitmasks = $this->buildBitmasks($input->lecturerSchedules);
 
         $this->addStep(2, 'Bangun bitmask', [
             'total_days' => count($bitmasks),
@@ -180,11 +159,11 @@ class SchedulingEngine
         ]);
         yield $this->lastStep();
 
-        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
-        $topOptions = array_slice($scored, 0, self::MAX_OPTIONS);
+        usort($scored, fn ($a, $b) => $this->compareScoredOptions($a, $b));
+        $topOptions = array_slice($scored, 0, $this->rules->maxOptions);
         $options = array_map(fn ($item) => $this->createScheduleOption($item), $topOptions);
 
-        $success = count($options) > 0 && $options[0]->score >= 50;
+        $success = count($options) > 0 && $options[0]->score >= $this->rules->minimumSuccessScore;
 
         yield new ThinkingStep(
             stepNumber: 'result',
@@ -203,12 +182,19 @@ class SchedulingEngine
         array $rooms,
         array $schedules,
         array $subjects,
-        array $allStudentSubjects
+        array $allStudentSubjects,
+        ?EngineRules $rules = null,
     ): ?array {
+        $rules ??= new EngineRules;
         $targetSchedule = self::findById($schedules, $scheduleId);
         if (! $targetSchedule) {
             return null;
         }
+
+        $semesterSchedules = array_values(array_filter(
+            $schedules,
+            fn ($schedule) => $schedule->semesterType === $targetSchedule->semesterType
+        ));
 
         $subject = self::findById($subjects, $targetSchedule->subjectId);
         if (! $subject) {
@@ -227,24 +213,24 @@ class SchedulingEngine
         $allStudentSubjectIds = array_values(array_unique(
             array_map(fn ($s) => $s->subjectId, array_filter(
                 $allStudentSubjects,
-                fn ($s) => in_array($s->studentId, $studentIds)
+                fn ($s) => in_array($s->studentId, $studentIds, true)
             ))
         ));
 
         $studentSchedules = array_values(array_filter(
-            $schedules,
-            fn ($s) => in_array($s->subjectId, $allStudentSubjectIds)
+            $semesterSchedules,
+            fn ($s) => in_array($s->subjectId, $allStudentSubjectIds, true)
                 && $s->id !== $targetSchedule->id
         ));
 
         $lecturerSchedules = array_values(array_filter(
-            $schedules,
+            $semesterSchedules,
             fn ($s) => $s->lecturerId === $targetSchedule->lecturerId
                 && $s->id !== $targetSchedule->id
         ));
 
         $totalStudents = count($studentIds);
-        $requiredSlots = self::calculateRequiredSlots($subject->credits);
+        $requiredSlots = self::calculateRequiredSlots($subject->credits, $rules);
 
         $input = new EngineInput(
             targetSchedule: $targetSchedule,
@@ -256,11 +242,12 @@ class SchedulingEngine
             requiredSlots: $requiredSlots,
             rooms: $rooms,
             allStudentSubjects: $allStudentSubjects,
+            rules: $rules,
         );
 
         return [
             'input' => $input,
-            'allSchedules' => $schedules,
+            'allSchedules' => $semesterSchedules,
         ];
     }
 
@@ -275,14 +262,25 @@ class SchedulingEngine
         return null;
     }
 
-    private static function calculateRequiredSlots(int $credits): int
+    private static function calculateRequiredSlots(int $credits, EngineRules $rules): int
     {
-        return (int) ceil(($credits * self::MINUTES_PER_CREDIT) / self::SLOT_DURATION_MINUTES);
+        if ($credits <= 0 || $rules->minutesPerCredit <= 0 || $rules->slotDurationMinutes <= 0) {
+            throw new \InvalidArgumentException('Credits and scheduling durations must be positive.');
+        }
+
+        return (int) ceil(($credits * $rules->minutesPerCredit) / $rules->slotDurationMinutes);
     }
 
     private function lastStep(): ThinkingStep
     {
         return $this->steps[count($this->steps) - 1];
+    }
+
+    private function assertTargetMatchesInput(RescheduleRequest $request, EngineInput $input): void
+    {
+        if ($request->scheduleId !== $input->targetSchedule->id) {
+            throw new \InvalidArgumentException('Request schedule ID does not match the engine input target schedule.');
+        }
     }
 
     private function addStep(int|string $stepNumber, string $title, array $details = []): void
@@ -324,32 +322,16 @@ class SchedulingEngine
 
     private function generateTimeSlots(): array
     {
-        $slots = [];
-        $totalMinutes = (self::MAX_END_HOUR - self::MIN_START_HOUR) * 60;
-        $totalSlots = (int) floor($totalMinutes / self::SLOT_DURATION_MINUTES);
-
-        for ($i = 0; $i < $totalSlots; $i++) {
-            $startMinutes = self::MIN_START_HOUR * 60 + ($i * self::SLOT_DURATION_MINUTES);
-            $endMinutes = $startMinutes + self::SLOT_DURATION_MINUTES;
-
-            $startTime = sprintf('%02d:%02d', intdiv($startMinutes, 60), $startMinutes % 60);
-            $endTime = sprintf('%02d:%02d', intdiv($endMinutes, 60), $endMinutes % 60);
-
-            $isBlocked = $startTime >= self::LUNCH_BREAK_START && $startTime < self::LUNCH_BREAK_END;
-
-            $slots[] = [
-                'slot_index' => $i,
-                'start_time' => $startTime,
-                'end_time' => $endTime,
-                'is_blocked' => $isBlocked,
-                'block_reason' => $isBlocked ? 'lunch_break' : null,
-            ];
-        }
-
-        return $slots;
+        return TimeSlotGrid::generate(
+            $this->rules->slotDurationMinutes,
+            $this->rules->minStartHour,
+            $this->rules->maxEndHour,
+            $this->rules->lunchBreakStart,
+            $this->rules->lunchBreakEnd,
+        );
     }
 
-    private function buildBitmasks(array $lecturerSchedules, array $studentSchedules, array $allSchedules, string $targetScheduleId, string $roomId): array
+    private function buildBitmasks(array $lecturerSchedules): array
     {
         $bitmasks = [];
 
@@ -378,6 +360,20 @@ class SchedulingEngine
         return $bitmasks;
     }
 
+    private function assertSchedulesFitGrid(array $schedules): void
+    {
+        foreach ($schedules as $schedule) {
+            if (
+                DayOfWeek::tryFrom($schedule->day) === null
+                || $schedule->startSlot < 0
+                || $schedule->endSlot < $schedule->startSlot
+                || $schedule->endSlot >= count($this->timeSlots)
+            ) {
+                throw new \InvalidArgumentException("Schedule {$schedule->id} has an invalid day or slot range for the configured time grid.");
+            }
+        }
+    }
+
     private function isLunchBreakSlot(array $slot): bool
     {
         return $slot['is_blocked'] && $slot['block_reason'] === 'lunch_break';
@@ -389,7 +385,9 @@ class SchedulingEngine
             return true;
         }
 
-        if ($day->isFriday() && $slot['start_time'] >= self::FRIDAY_PRAYER_START && $slot['start_time'] < self::LUNCH_BREAK_END) {
+        if ($day->isFriday()
+            && $slot['start_time'] < $this->rules->lunchBreakEnd
+            && $slot['end_time'] > $this->rules->fridayPrayerStart) {
             return true;
         }
 
@@ -416,17 +414,17 @@ class SchedulingEngine
                 $startSlot = $this->timeSlots[$i];
                 $endSlot = $this->timeSlots[$i + $requiredSlots - 1];
 
-                if ($day->isFriday() && $endSlot['end_time'] > self::FRIDAY_PRAYER_START) {
+                if ($day->isFriday() && $endSlot['end_time'] > $this->rules->fridayPrayerStart) {
                     continue;
                 }
 
-                if ((int) explode(':', $startSlot['start_time'])[0] < self::MIN_START_HOUR) {
+                if ((int) explode(':', $startSlot['start_time'])[0] < $this->rules->minStartHour) {
                     continue;
                 }
 
                 $endHour = (int) explode(':', $endSlot['end_time'])[0];
                 $endMin = (int) explode(':', $endSlot['end_time'])[1];
-                if ($endHour > self::MAX_END_HOUR || ($endHour === self::MAX_END_HOUR && $endMin > 0)) {
+                if ($endHour > $this->rules->maxEndHour || ($endHour === $this->rules->maxEndHour && $endMin > 0)) {
                     continue;
                 }
 
@@ -454,6 +452,10 @@ class SchedulingEngine
             $day = DayOfWeek::from($dayValue);
 
             for ($i = 0; $i < $totalSlots; $i++) {
+                if ($this->isLunchBreakSlot($this->timeSlots[$i])) {
+                    continue;
+                }
+
                 $jumpedSlots = [];
                 $validSlots = 0;
                 $j = 0;
@@ -478,17 +480,17 @@ class SchedulingEngine
                     $lastSlotIndex = $i + $j - 1;
                     $endSlot = $this->timeSlots[$lastSlotIndex];
 
-                    if ($day->isFriday() && $endSlot['end_time'] > self::FRIDAY_PRAYER_START) {
+                    if ($day->isFriday() && $endSlot['end_time'] > $this->rules->fridayPrayerStart) {
                         continue;
                     }
 
-                    if ((int) explode(':', $startSlot['start_time'])[0] < self::MIN_START_HOUR) {
+                    if ((int) explode(':', $startSlot['start_time'])[0] < $this->rules->minStartHour) {
                         continue;
                     }
 
                     $endHour = (int) explode(':', $endSlot['end_time'])[0];
                     $endMin = (int) explode(':', $endSlot['end_time'])[1];
-                    if ($endHour > self::MAX_END_HOUR || ($endHour === self::MAX_END_HOUR && $endMin > 0)) {
+                    if ($endHour > $this->rules->maxEndHour || ($endHour === $this->rules->maxEndHour && $endMin > 0)) {
                         continue;
                     }
 
@@ -575,6 +577,7 @@ class SchedulingEngine
 
             $scored[] = array_merge($candidate, [
                 'score' => max(0, 100 - $totalPenalty),
+                'capacity_gap' => $candidate['room_capacity'] - $input->totalStudents,
                 'code_factors' => $codeFactors,
             ]);
         }
@@ -604,7 +607,7 @@ class SchedulingEngine
             )) {
                 $studentsInSubject = $input->getStudentsForSubject($schedule->subjectId);
                 foreach ($studentsInSubject as $studentId) {
-                    if (in_array($studentId, $studentIds) && ! in_array($studentId, $conflictStudentIds)) {
+                    if (in_array($studentId, $studentIds, true) && ! in_array($studentId, $conflictStudentIds, true)) {
                         $conflictStudentIds[] = $studentId;
                     }
                 }
@@ -617,7 +620,7 @@ class SchedulingEngine
             return ['penalty' => 0, 'factor' => null];
         }
 
-        $penalty = (int) round(self::PENALTY_STUDENT_CONFLICT * ($conflictCount / $totalStudents));
+        $penalty = (int) round($input->rules->penaltyStudentConflict * ($conflictCount / $totalStudents));
 
         return [
             'penalty' => $penalty,
@@ -635,14 +638,14 @@ class SchedulingEngine
 
     private function calculateLunchProximityPenalty(array $candidate): array
     {
-        $lunchStartSlot = $this->findSlotByTime(self::LUNCH_BREAK_START);
+        $lunchStartSlot = $this->findSlotByTime($this->rules->lunchBreakStart);
         $distance = abs($candidate['start_slot'] - $lunchStartSlot);
 
-        if ($distance > 2) {
+        if ($distance > $this->rules->proximityWindowSlots) {
             return ['penalty' => 0, 'factor' => null];
         }
 
-        $penalty = (int) round(self::PENALTY_LUNCH_PROXIMITY * (1 - $distance / 2));
+        $penalty = (int) round($this->rules->penaltyLunchProximity * (1 - $distance / $this->rules->proximityWindowSlots));
 
         return [
             'penalty' => $penalty,
@@ -673,11 +676,11 @@ class SchedulingEngine
             }
         }
 
-        if ($minDistance > 2 || $nearbySubjectId === null) {
+        if ($minDistance > $this->rules->proximityWindowSlots || $nearbySubjectId === null) {
             return ['penalty' => 0, 'factor' => null];
         }
 
-        $penalty = (int) round(self::PENALTY_LECTURER_PROXIMITY * (1 - $minDistance / 2));
+        $penalty = (int) round($this->rules->penaltyLecturerProximity * (1 - $minDistance / $this->rules->proximityWindowSlots));
 
         return [
             'penalty' => $penalty,
@@ -692,17 +695,17 @@ class SchedulingEngine
     {
         $startHour = (int) explode(':', $candidate['start_time'])[0];
 
-        if ($startHour >= 10) {
+        if ($startHour >= $this->rules->workStartHour + $this->rules->proximityWindowSlots) {
             return ['penalty' => 0, 'factor' => null];
         }
 
-        if ($startHour < self::WORK_START_HOUR) {
+        if ($startHour < $this->rules->workStartHour) {
             // masuk jam 7 dapet ekstra penalti berat (misal base 15 + 25 = 40 poin)
-            $penalty = self::PENALTY_EARLY_MORNING + 25;
+            $penalty = $this->rules->penaltyEarlyMorning + $this->rules->earlyExtremeExtraPenalty;
             $label = 'Jam ekstrem terlalu pagi';
         } else {
             // masuk jam 8 dapet penalti normal (0-15 poin)
-            $penalty = max(0, (int) round(self::PENALTY_EARLY_MORNING * (1 - ($startHour - self::WORK_START_HOUR) / 2)));
+            $penalty = max(0, (int) round($this->rules->penaltyEarlyMorning * (1 - ($startHour - $this->rules->workStartHour) / $this->rules->proximityWindowSlots)));
             $label = 'Jam terlalu pagi';
         }
 
@@ -719,20 +722,20 @@ class SchedulingEngine
         $endHour = (int) explode(':', $candidate['end_time'])[0];
         $endMinute = (int) explode(':', $candidate['end_time'])[1];
 
-        if ($endHour < 14) {
+        if ($endHour < $this->rules->workEndHour - $this->rules->proximityWindowSlots) {
             return ['penalty' => 0, 'factor' => null];
         }
 
-        $hoursAfterNormal = ($endHour + ($endMinute / 60)) - self::WORK_END_HOUR;
+        $hoursAfterNormal = ($endHour + ($endMinute / 60)) - $this->rules->workEndHour;
 
         if ($hoursAfterNormal <= 0) {
             // jam 14:00 - 16:00 (normal, max 15 poin)
-            $hoursBeforeEnd = max(0, self::WORK_END_HOUR - ($endHour + ($endMinute / 60)));
-            $penalty = max(0, (int) round(self::PENALTY_LATE_AFTERNOON * (1 - $hoursBeforeEnd / 2)));
+            $hoursBeforeEnd = max(0, $this->rules->workEndHour - ($endHour + ($endMinute / 60)));
+            $penalty = max(0, (int) round($this->rules->penaltyLateAfternoon * (1 - $hoursBeforeEnd / $this->rules->proximityWindowSlots)));
             $label = 'Jam terlalu sore';
         } else {
             // lewat dari 16:00 (hajar kelipatan 10 poin tiap jam telat)
-            $penalty = self::PENALTY_LATE_AFTERNOON + (int) round($hoursAfterNormal * 10);
+            $penalty = $this->rules->penaltyLateAfternoon + (int) round($hoursAfterNormal * $this->rules->lateExtremeHourlyPenalty);
             $label = 'Jam ekstrem malam';
         }
 
@@ -748,11 +751,14 @@ class SchedulingEngine
     {
         $difference = $candidate['room_capacity'] - $totalStudents;
 
-        if ($difference <= 10) {
+        $penalty = min(
+            $this->rules->penaltyCapacity,
+            (int) round($this->rules->penaltyCapacity * $difference / ($difference + $this->rules->capacityTargetGap)),
+        );
+
+        if ($penalty === 0) {
             return ['penalty' => 0, 'factor' => null];
         }
-
-        $penalty = max(0, min(self::PENALTY_CAPACITY, (int) round(self::PENALTY_CAPACITY * (1 - 10 / $difference))));
 
         return [
             'penalty' => $penalty,
@@ -770,7 +776,7 @@ class SchedulingEngine
             return ['penalty' => 0, 'factor' => null];
         }
 
-        $penalty = self::PENALTY_SLOT_JUMPING * count($candidate['jumped_slots']);
+        $penalty = $this->rules->penaltySlotJumping * count($candidate['jumped_slots']);
 
         return [
             'penalty' => $penalty,
@@ -805,5 +811,14 @@ class SchedulingEngine
             score: $data['score'],
             codeFactors: $data['code_factors'],
         );
+    }
+
+    private function compareScoredOptions(array $left, array $right): int
+    {
+        return ($right['score'] <=> $left['score'])
+            ?: ($left['capacity_gap'] <=> $right['capacity_gap'])
+            ?: ($left['day']->value <=> $right['day']->value)
+            ?: ($left['start_slot'] <=> $right['start_slot'])
+            ?: strcmp((string) $left['room_id'], (string) $right['room_id']);
     }
 }

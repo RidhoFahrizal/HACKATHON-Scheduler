@@ -12,7 +12,7 @@ class ScheduleOption
         public readonly int $endSlot,
         public readonly string $startTime,
         public readonly string $endTime,
-        public readonly int $roomId,
+        public readonly string $roomId,
         public readonly string $roomName,
         public readonly int $score,
         public readonly array $codeFactors = [],
@@ -29,7 +29,7 @@ class ScheduleOption
             'room_id' => $this->roomId,
             'room_name' => $this->roomName,
             'score' => $this->score,
-            'code_factors' => array_map(fn(CodeFactor $cf) => $cf->toArray(), $this->codeFactors),
+            'code_factors' => array_map(fn (CodeFactor $cf) => $cf->toArray(), $this->codeFactors),
         ];
     }
 }

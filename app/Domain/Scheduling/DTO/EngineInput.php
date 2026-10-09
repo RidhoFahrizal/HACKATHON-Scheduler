@@ -5,7 +5,10 @@ namespace App\Domain\Scheduling\DTO;
 class EngineInput
 {
     public readonly array $studentIds;
+
     public readonly array $subjectStudentMap;
+
+    public readonly EngineRules $rules;
 
     public function __construct(
         public readonly ScheduleDto $targetSchedule,
@@ -17,10 +20,16 @@ class EngineInput
         public readonly int $requiredSlots,
         public readonly array $rooms,
         public readonly array $allStudentSubjects = [],
+        ?EngineRules $rules = null,
     ) {
+        $this->rules = $rules ?? new EngineRules;
         $this->studentIds = array_values(array_unique(
-            array_map(fn($e) => $e->studentId, $enrolledStudents)
+            array_map(fn ($e) => $e->studentId, $enrolledStudents)
         ));
+
+        if ($requiredSlots < 1 || $totalStudents !== count($this->studentIds)) {
+            throw new \InvalidArgumentException('Engine input must have positive slot demand and an accurate unique student count.');
+        }
 
         $this->subjectStudentMap = $this->buildSubjectStudentMap();
     }
@@ -31,6 +40,7 @@ class EngineInput
         foreach ($this->allStudentSubjects as $ss) {
             $map[$ss->subjectId][] = $ss->studentId;
         }
+
         return $map;
     }
 
@@ -51,6 +61,7 @@ class EngineInput
             'lecturer_schedules_count' => count($this->lecturerSchedules),
             'student_schedules_count' => count($this->studentSchedules),
             'available_rooms' => count($this->rooms),
+            'algorithm_rules' => $this->rules->toArray(),
         ];
     }
 }
