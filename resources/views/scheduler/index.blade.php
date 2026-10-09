@@ -115,6 +115,19 @@
                   </div>
 
                   <fieldset id="reschedule-parameters-fieldset" disabled class="reschedule-fieldset">
+                    <div class="form-row-grid">
+                      <div class="form-group">
+                        <label for="reschedule-target-date" class="form-label">Tanggal mulai berlaku</label>
+                        <input id="reschedule-target-date" class="form-select" type="date" value="{{ now()->toDateString() }}">
+                      </div>
+                      <div class="form-group">
+                        <label for="reschedule-scope-select" class="form-label">Cakupan perubahan</label>
+                        <select id="reschedule-scope-select" class="form-select">
+                          <option value="once">Sekali saja</option>
+                          <option value="onwards">Seterusnya sampai akhir semester</option>
+                        </select>
+                      </div>
+                    </div>
                     <div class="form-group">
                       <label for="reschedule-duration-select" class="form-label">2. Durasi Perpindahan Jadwal</label>
                       <select id="reschedule-duration-select" class="form-select">

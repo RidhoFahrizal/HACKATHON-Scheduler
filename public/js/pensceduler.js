@@ -9,6 +9,8 @@ const {
   recommendationSlots: RECOMMENDATION_SLOTS
 } = window.PENSCEDULER;
 let ALL_RESCHEDULE_REQUESTS = window.PENSCEDULER.rescheduleRequests;
+let DATABASE_SCHEDULES = [];
+let DATABASE_ROOMS = [];
 
 const I18N_DICTIONARY = {
   id: {
@@ -234,7 +236,67 @@ document.addEventListener("DOMContentLoaded", () => {
   setupClassesViewInteractions();
   setupChatModule();
   renderActiveRole(currentRole);
+  loadSchedulingCatalog();
 });
+
+async function loadSchedulingCatalog() {
+  try {
+    const response = await fetch("/api/scheduling/catalog", {
+      headers: { "Accept": "application/json" }
+    });
+    if (!response.ok) throw new Error("Katalog jadwal gagal dimuat.");
+
+    const catalog = await response.json();
+    DATABASE_ROOMS = Array.isArray(catalog.rooms) ? catalog.rooms : [];
+    DATABASE_SCHEDULES = (Array.isArray(catalog.schedules) ? catalog.schedules : []).map(schedule => {
+      const start = schedule.start_time || "08:00";
+      const end = schedule.end_time || start;
+      const durationHours = Math.max(1, Math.round((timeToMinutes(end) - timeToMinutes(start)) / 60));
+
+      return {
+        id: schedule.id,
+        code: schedule.code || "",
+        title: schedule.subject,
+        lecturer: schedule.lecturer,
+        day: schedule.day,
+        time: `${start} - ${end}`,
+        startHour: Number(start.split(":")[0]),
+        durationHours,
+        room: schedule.room,
+        roomId: schedule.room_id,
+        sks: `${schedule.credits} SKS`
+      };
+    });
+
+    populateRoomOptions();
+    if (currentRole !== "baak") render7Day1HourMatrix();
+    populateRescheduleCourseOptions();
+  } catch (error) {
+    console.error(error);
+    showToast("Katalog database tidak tersedia; tampilan contoh tetap bisa digunakan.");
+  }
+}
+
+function timeToMinutes(value) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+// The Blade view ships the default campus rooms so the form stays usable offline; catalog rooms replace them only when present.
+function populateRoomOptions() {
+  const select = document.getElementById("reschedule-target-room");
+  if (!select || DATABASE_ROOMS.length === 0) return;
+
+  select.innerHTML = DATABASE_ROOMS.map(room => {
+    const building = room.building ? ` (${room.building.name}, Lt. ${room.floor})` : "";
+    return `<option value="${escapeHtml(room.name)}">${escapeHtml(room.code || room.name)} - ${escapeHtml(room.name)}${escapeHtml(building)}</option>`;
+  }).join("");
+}
+
+function getSchedulingClass(courseId) {
+  return DATABASE_SCHEDULES.find(item => item.id === courseId)
+    || APP_DATA[currentRole]?.classes?.find(item => item.id === courseId);
+}
 
 function initThemeAndAccessibility() {
   const savedTheme = localStorage.getItem("penscheduler_theme") || "light";
@@ -1170,18 +1232,17 @@ function render7Day1HourMatrix() {
 
   if (!daysHeaderRow || !hoursHeaderRow || !tbody) return;
 
-  const weekDays = [
-    { name: "Senin", date: "12 Okt" },
-    { name: "Selasa", date: "13 Okt" },
-    { name: "Rabu", date: "14 Okt" },
-    { name: "Kamis", date: "15 Okt" },
-    { name: "Jumat", date: "16 Okt" },
-    { name: "Sabtu", date: "17 Okt" },
-    { name: "Minggu", date: "18 Okt" }
-  ];
+  const dayNames = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  const monday = new Date();
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const weekDays = dayNames.map((name, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return { name, date: new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short" }).format(date) };
+  });
 
   const hours = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
-  const campusRooms = [
+  const sampleRooms = [
     "Lab C 102",
     "Lab C 103",
     "Lab C 104",
@@ -1193,6 +1254,9 @@ function render7Day1HourMatrix() {
     "B-101",
     "D4-201"
   ];
+  const campusRooms = DATABASE_ROOMS.length > 0
+    ? DATABASE_ROOMS.map(room => room.name)
+    : sampleRooms;
 
   let daysHtml = '<th class="room-col-header" rowspan="2">Ruangan</th>';
   weekDays.forEach(day => {
@@ -1209,7 +1273,9 @@ function render7Day1HourMatrix() {
   });
   hoursHeaderRow.innerHTML = hoursHtml;
 
-  const classes = APP_DATA[currentRole].classes || [];
+  const classes = DATABASE_SCHEDULES.length > 0
+    ? DATABASE_SCHEDULES
+    : (APP_DATA[currentRole].classes || []);
   const isMahasiswa = currentRole === "mahasiswa";
   let bodyHtml = "";
 
@@ -1272,7 +1338,9 @@ function populateRescheduleCourseOptions() {
     titleEl.textContent = isMahasiswa ? "Pengajuan Pindah Jadwal Perkuliahan" : "Pindah Jadwal Perkuliahan";
   }
 
-  const classes = APP_DATA[currentRole].classes || [];
+  const classes = DATABASE_SCHEDULES.length > 0
+    ? DATABASE_SCHEDULES
+    : (APP_DATA[currentRole].classes || []);
 
   select.innerHTML = `<option value="">-- Pilih Matakuliah --</option>` +
     classes.map(c => {
@@ -1297,8 +1365,7 @@ function onRescheduleCourseChange(courseId) {
     return;
   }
 
-  const profile = APP_DATA[currentRole];
-  const c = profile.classes.find(item => item.id === courseId);
+  const c = getSchedulingClass(courseId);
 
   if (c && infoBox) {
     infoBox.style.display = "block";
@@ -1311,16 +1378,7 @@ function onRescheduleCourseChange(courseId) {
   if (btnSubmit) btnSubmit.disabled = false;
 }
 
-function requestSystemRecommendations() {
-  const modal = document.getElementById("recommendations-overlay-modal");
-  const container = document.getElementById("modal-recommendations-container");
-  if (!modal || !container) return;
-
-  const courseSelect = document.getElementById("reschedule-course-select");
-  const selectedText = courseSelect && courseSelect.value ? courseSelect.options[courseSelect.selectedIndex].text : "Matakuliah";
-
-  document.getElementById("modal-rec-course-title").textContent = selectedText.split("(")[0].trim();
-
+function renderMockRecommendationSlots(container) {
   container.innerHTML = RECOMMENDATION_SLOTS.map(s => `
     <div class="overlay-rec-card" onclick="applyRecommendationSlot('${s.day}', '${s.time}', '${s.room}')">
       <div class="overlay-rec-header">
@@ -1334,8 +1392,77 @@ function requestSystemRecommendations() {
       </button>
     </div>
   `).join("");
+}
 
+function requestSystemRecommendations() {
+  const modal = document.getElementById("recommendations-overlay-modal");
+  const container = document.getElementById("modal-recommendations-container");
+  if (!modal || !container) return;
+
+  const courseSelect = document.getElementById("reschedule-course-select");
+  const scheduleId = courseSelect?.value;
+  const selectedText = scheduleId ? courseSelect.options[courseSelect.selectedIndex].text : "Matakuliah";
+  const useEngine = DATABASE_SCHEDULES.some(item => item.id === scheduleId);
+
+  const targetDate = document.getElementById("reschedule-target-date")?.value;
+  const scope = document.getElementById("reschedule-scope-select")?.value;
+  if (useEngine && !targetDate) {
+    showToast("Tanggal mulai berlaku wajib diisi.");
+    return;
+  }
+
+  document.getElementById("modal-rec-course-title").textContent = useEngine
+    ? getSchedulingClass(scheduleId).title
+    : selectedText.split("(")[0].trim();
   modal.style.display = "flex";
+
+  // Mock slots keep the form handoff usable when the course is not in the database catalog or the engine is unreachable.
+  if (!useEngine) {
+    renderMockRecommendationSlots(container);
+    return;
+  }
+
+  container.innerHTML = '<p class="view-subtitle">Engine sedang menghitung slot dan memeriksa bentrok...</p>';
+
+  fetch("/api/scheduling/evaluate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({ scheduleId, scope, target: targetDate })
+  }).then(async response => {
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || "Permintaan rekomendasi gagal.");
+
+    const options = Array.isArray(result.options) ? result.options : [];
+    if (options.length === 0) {
+      container.innerHTML = `<p class="view-subtitle">${result.success ? "Tidak ada opsi." : "Tidak ditemukan slot yang memenuhi aturan engine."}</p>`;
+      return;
+    }
+
+    container.innerHTML = options.map((option, index) => `
+      <div class="overlay-rec-card">
+        <div class="overlay-rec-header">
+          <span class="overlay-rec-day">${escapeHtml(option.day)}</span>
+          <span class="overlay-rec-badge">Skor ${Number(option.score)}</span>
+        </div>
+        <div class="overlay-rec-time">${escapeHtml(option.start_time)} - ${escapeHtml(option.end_time)}</div>
+        <div class="overlay-rec-room">Ruangan: <strong>${escapeHtml(option.room_name)}</strong></div>
+        <button type="button" class="btn-card-action primary apply-engine-option" data-option-index="${index}" style="width: 100%; margin-top: 10px;">
+          Pilih Slot Ini &rarr;
+        </button>
+      </div>
+    `).join("");
+
+    container.querySelectorAll(".apply-engine-option").forEach(button => {
+      button.addEventListener("click", () => {
+        const option = options[Number(button.dataset.optionIndex)];
+        applyRecommendationSlot(option.day, `${option.start_time} - ${option.end_time}`, option.room_name);
+      });
+    });
+  }).catch(error => {
+    console.error(error);
+    renderMockRecommendationSlots(container);
+    showToast("Engine tidak tersedia; menampilkan slot contoh.");
+  });
 }
 
 function closeRecommendationOverlay() {
@@ -1393,7 +1520,7 @@ function submitRescheduleRequest() {
 
   if (!isMahasiswa) {
     const profile = APP_DATA[currentRole];
-    const c = profile.classes.find(item => item.id === courseSelect.value);
+    const c = getSchedulingClass(courseSelect.value);
     if (c) {
       c.hasShift = true;
       c.shiftedSchedule = `${targetDay.value}, ${targetTime.value} di ${targetRoom.value} (${durationSelect.value})`;
