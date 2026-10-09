@@ -49,8 +49,8 @@ test('thinking log contains all steps', function () {
         ),
     ];
 
-    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
-    $result = $this->engine->evaluate($request, $input);
+    $buildResult = $this->buildEngineInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
 
     dump('=== THINKING LOG ===');
     dump($result->thinkingLog);

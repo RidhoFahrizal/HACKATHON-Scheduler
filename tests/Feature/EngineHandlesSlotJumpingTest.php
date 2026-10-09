@@ -43,8 +43,8 @@ test('engine handles slot jumping over lunch break', function () {
 
     $schedules = $this->getBaseSchedules();
 
-    $input = SchedulingEngine::buildInput('3', $rooms, $schedules, $subjects, $studentSubjects);
-    $result = $this->engine->evaluate($request, $input);
+    $buildResult = $this->buildEngineInput('3', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
 
     dump('=== SLOT JUMPING (3 SKS = 3 slots, jumps over lunch) ===');
     dump('Thinking Log:');

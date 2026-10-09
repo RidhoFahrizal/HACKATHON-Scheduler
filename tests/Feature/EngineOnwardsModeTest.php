@@ -35,8 +35,8 @@ test('engine ONWARDS mode verifies pattern across all remaining weeks', function
     $studentSubjects = $this->getStudentSubjects('1', $students);
     $schedules = $this->getBaseSchedules();
 
-    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
-    $result = $this->engine->evaluate($request, $input);
+    $buildResult = $this->buildEngineInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
 
     dump('=== ONWARDS MODE: VERIFY PATTERN ACROSS ALL REMAINING WEEKS ===');
     dump('Scope: ONWARDS');
@@ -74,8 +74,8 @@ test('engine ONCE mode does not verify across weeks', function () {
     $studentSubjects = $this->getStudentSubjects('1', $students);
     $schedules = $this->getBaseSchedules();
 
-    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
-    $result = $this->engine->evaluate($request, $input);
+    $buildResult = $this->buildEngineInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
 
     dump('=== ONCE MODE: SINGLE WEEK ONLY ===');
     dump('Scope: ONCE');

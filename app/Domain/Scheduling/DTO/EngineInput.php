@@ -4,6 +4,9 @@ namespace App\Domain\Scheduling\DTO;
 
 class EngineInput
 {
+    public readonly array $studentIds;
+    public readonly array $subjectStudentMap;
+
     public function __construct(
         public readonly ScheduleDto $targetSchedule,
         public readonly SubjectDto $subject,
@@ -13,7 +16,28 @@ class EngineInput
         public readonly int $totalStudents,
         public readonly int $requiredSlots,
         public readonly array $rooms,
-    ) {}
+        public readonly array $allStudentSubjects = [],
+    ) {
+        $this->studentIds = array_values(array_unique(
+            array_map(fn($e) => $e->studentId, $enrolledStudents)
+        ));
+
+        $this->subjectStudentMap = $this->buildSubjectStudentMap();
+    }
+
+    private function buildSubjectStudentMap(): array
+    {
+        $map = [];
+        foreach ($this->allStudentSubjects as $ss) {
+            $map[$ss->subjectId][] = $ss->studentId;
+        }
+        return $map;
+    }
+
+    public function getStudentsForSubject(string $subjectId): array
+    {
+        return $this->subjectStudentMap[$subjectId] ?? [];
+    }
 
     public function toArray(): array
     {

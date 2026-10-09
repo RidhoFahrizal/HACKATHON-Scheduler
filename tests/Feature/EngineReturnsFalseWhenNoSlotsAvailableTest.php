@@ -49,8 +49,8 @@ test('engine returns false when no good slots available', function () {
         ),
     ];
 
-    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
-    $result = $this->engine->evaluate($request, $input);
+    $buildResult = $this->buildEngineInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
 
     dump('=== NO GOOD SLOTS (30 students, room capacity 10) ===');
     dump('Success: ' . ($result->success ? 'true' : 'false'));

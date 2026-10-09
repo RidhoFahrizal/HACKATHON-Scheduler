@@ -39,8 +39,8 @@ test('engine returns top 10 options with code factors', function () {
     $studentSubjects = $this->getStudentSubjects('1', $students);
     $schedules = $this->getBaseSchedules();
 
-    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
-    $result = $this->engine->evaluate($request, $input);
+    $buildResult = $this->buildEngineInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
 
     dump('=== ENGINE RETURNS TOP 10 OPTIONS ===');
     dump('Success: ' . ($result->success ? 'true' : 'false'));

@@ -50,8 +50,8 @@ test('engine handles friday prayer time correctly', function () {
         ),
     ];
 
-    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
-    $result = $this->engine->evaluate($request, $input);
+    $buildResult = $this->buildEngineInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
 
     dump('=== FRIDAY PRAYER HANDLING ===');
     foreach ($result->options as $option) {

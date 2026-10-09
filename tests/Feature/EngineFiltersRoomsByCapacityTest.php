@@ -52,8 +52,8 @@ test('engine filters rooms by capacity', function () {
         ),
     ];
 
-    $input = SchedulingEngine::buildInput('1', $rooms, $schedules, $subjects, $studentSubjects);
-    $result = $this->engine->evaluate($request, $input);
+    $buildResult = $this->buildEngineInput('1', $rooms, $schedules, $subjects, $studentSubjects);
+    $result = $this->engine->evaluate($request, $buildResult['input'], $buildResult['allSchedules']);
 
     dump('=== ROOM CAPACITY FILTER (30 students, rooms: 20 & 40) ===');
     foreach ($result->options as $option) {

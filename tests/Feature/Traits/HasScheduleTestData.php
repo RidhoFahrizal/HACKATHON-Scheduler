@@ -90,4 +90,17 @@ trait HasScheduleTestData
             ),
         ];
     }
+
+    protected function buildEngineInput(string $scheduleId, array $rooms, array $schedules, array $subjects, array $studentSubjects): array
+    {
+        $result = \App\Domain\Scheduling\Engine\SchedulingEngine::buildInput(
+            $scheduleId,
+            $rooms,
+            $schedules,
+            $subjects,
+            $studentSubjects
+        );
+
+        return $result;
+    }
 }
