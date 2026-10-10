@@ -26,6 +26,8 @@ class DatabaseSeeder extends Seeder
             ChatSeeder::class,
             AuditLogSeeder::class,
             EngineRunSeeder::class,
+            BuildingSeeder::class,
+            RoleSeeder::class,
         ]);
 
         User::factory()->create([

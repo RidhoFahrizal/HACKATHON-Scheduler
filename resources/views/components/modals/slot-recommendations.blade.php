@@ -13,6 +13,10 @@
       <p style="font-size: 12px; color: var(--text-subtle); margin-bottom: 14px;">
         Pilih salah satu slot rekomendasi hasil algoritma sistem di bawah ini untuk menerapkan parameter ke formulir pemindahan jadwal:
       </p>
+      <div id="recommendation-status" class="process-status" style="display: none;" role="status" aria-live="polite">
+        <span class="process-spinner" aria-hidden="true"></span>
+        <span id="recommendation-status-text">Menyiapkan perhitungan...</span>
+      </div>
       <div class="overlay-rec-grid" id="modal-recommendations-container">
       </div>
     </div>

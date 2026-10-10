@@ -16,6 +16,10 @@ class Lecturer extends Model
     protected $fillable = [
         'username',
         'email',
+        'nip',
+        'code',
+        'academic_title',
+        'department',
     ];
 
     public function subjects(): HasMany
