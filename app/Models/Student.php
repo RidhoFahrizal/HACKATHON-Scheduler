@@ -17,6 +17,10 @@ class Student extends Model
     protected $fillable = [
         'username',
         'class',
+        'nrp',
+        'cohort_year',
+        'department',
+        'email',
     ];
 
     public function subjects(): BelongsToMany

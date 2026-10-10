@@ -19,7 +19,7 @@ class SubjectDto
             id: $model->id,
             name: $model->name,
             credits: $model->credits,
-            lecturerId: $model->lecturerId,
+            lecturerId: $model->lecturerId ?? '',
         );
     }
 
