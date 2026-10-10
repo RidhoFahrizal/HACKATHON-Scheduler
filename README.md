@@ -1,180 +1,137 @@
-# Academic Administration Intelligent Scheduler & Automation System
+# PENSCEDULER - Academic Administration Intelligent Scheduler
 
-An autonomous academic administration assistant designed for the Academic Administration Bureau (Biro Administrasi Akademik dan Kemahasiswaan - BAAK). The system handles student course registration (KRS), automated conflict-free class scheduling, and official student enrolment certificate generation through an agentic workflow with real-time reasoning transparency.
-
----
-
-## 1. Domain Scope & System Overview
-
-Academic administrators manage high-stakes scheduling constraints, student enrollment compliance, and formal certification requests each semester. This application automates these operations via an autonomous agent pipeline:
-
-- **Course Registration (KRS)**: Validates semester credit limits (SKS), prerequisite chains, and student academic standing before confirming course enrollments.
-- **Academic Scheduling**: Computes conflict-free allocations across courses, instructors, physical rooms, and student cohorts using constraint satisfaction heuristics.
-- **Student Enrolment Certificates**: Automatically generates standardized verification certificates (Surat Keterangan Mahasiswa Aktif) for enrolled students.
-- **Source Ingestion & Data Privacy**: Ingests external academic datasets securely while operating strictly on anonymized, non-sensitive records.
+An automated academic schedule management and course reschedule platform developed for Politeknik Elektronika Negeri Surabaya (PENS). The platform streamlines course rescheduling workflows across Students, Lecturers, and the Academic Administration Bureau (BAAK) through deterministic bitmask conflict resolution and AI-assisted interaction.
 
 ---
 
-## 2. Core Functional Modules (MVP)
+## Tim Pengembang (Team Information)
 
-### Course Registration Engine (KRS)
-
-- Validates course prerequisite graphs and student eligibility.
-- Enforces maximum semester credit limits (SKS) based on prior grade point index (IPS/IPK).
-- Prevents concurrent enrollment in overlapping course time slots.
-- Produces finalized student study plans with validation audit logs.
-
-### Intelligent Schedule Optimizer
-
-- Resolves multi-dimensional scheduling constraints: room capacity, equipment requirements, lecturer availability, and cohort clash prevention.
-- Automatically flags scheduling collisions and proposes alternative time-room pairings.
-- Outputs structured timetable matrices exportable across departments.
-
-### Student Enrolment Certificate Generator
-
-- Verifies real-time active student status and tuition fee clearance.
-- Populates official administrative templates with verified academic metadata.
-- Issues digitally verifiable certificate records ready for administrative dispatch.
-
-### Source Data Ingestion Interface
-
-- Interactive UI upload interface supporting CSV and JSON data sources (curriculum matrices, room inventories, lecturer availability, course catalogs).
-- **Data Privacy by Design**: Operates purely on synthetic and non-sensitive identifiers. The system strictly excludes personally identifiable information (PII) such as national identity numbers (KTP), personal contact details, or financial credentials.
-
-### Execution Telemetry & Agent Transparency
-
-- **Real-Time Thinking Trace**: Visualizes agent reasoning steps, evaluated constraints, and tool invocation sequences directly on the user interface.
-- **Task Summary Badges**: Displays execution phase status (`planning`, `executing`, `validating`, `completed`) alongside latency metrics.
-- **Audit Log Panel**: Detailed breakdown of decision rationale for administrative verification.
+- **Nama Tim**: Geneva 1967
+- **Anggota Kelompok**:
+  - Ridho Fahrizal
+  - Moch. Alif Akbar
+  - Yeremia Christian Candra Octaviano
 
 ---
 
-## 3. Operational Workflow (Input, Agent Execution, Output)
+## Deskripsi Aplikasi (Application Description)
 
-The system operates through a deterministic three-stage lifecycle:
+PENSCEDULER menggantikan alur koordinasi perubahan jadwal kuliah yang sebelumnya dilakukan secara manual dan terfragmentasi menjadi satu sistem terotomasi dan terpadu.
 
-```
-[ Input Layer ] ───► [ Autonomous Agent Core ] ───► [ Output Layer ]
-- Source Datasets    - Constraint Evaluation          - Final Timetable Matrix
-- Admin Prompts      - Conflict Resolution Heuristics - Approved Study Plan (KRS)
-- Student Requests   - Dynamic Tool Invocations       - Enrolment Certificate
-                     - Thinking & Trace Logging       - Execution Summary Log
-```
+### Fitur Utama
 
-### 1. Input Stage
+1. **Alur Berbasis Peran (Role-Based Workflows)**:
+   - **Mahasiswa (Student)**: Melihat jadwal kuliah mingguan, memantau indikator pergeseran jadwal (badge perubahan), mengajukan permohonan reschedule dengan durasi fleksibel (1 sampai 4 minggu atau permanen), serta berkonsultasi melalui asisten AI.
+   - **Dosen (Lecturer)**: Memantau jadwal mengajar, menyetujui atau menolak permohonan jadwal pengganti dari mahasiswa, mengajukan jadwal pengganti mandiri dengan rekomendasi slot bebas bentrok otomatis, dan melihat daftar mahasiswa secara anonim.
+   - **BAAK (Academic Administration Bureau)**: Dashboard monitoring kampus, manajemen CRUD master data (Ruangan lintas gedung: D4, D3, Pasca, SAW; Subjek/Mata Kuliah; Dosen; Mahasiswa), rekap permohonan reschedule institusi, impor massal data via CSV dengan validasi baris, dan log audit operasional.
 
-- **Administrative Directives**: User requests via conversational input (e.g., "Generate conflict-free schedule for 3rd semester Informatics" or "Process enrolment certificate for Student ID 20231001").
-- **Uploaded Data Sources**: Tabular inputs containing course lists, room capacities, time slots, and lecturer time preferences.
-- **Student Parameter Payloads**: Student study plan submissions and semester credit target requests.
+2. **Mesin Penjadwalan Deterministik (Deterministic Bitmask Engine)**:
+   - Mesin algoritma bitmask berbasis PHP murni untuk mendeteksi irisan waktu kosong, ketersediaan dosen, kapasitas ruangan, dan bentrok KRS mahasiswa secara instan tanpa ketergantungan pihak ketiga.
 
-### 2. Agent Execution Stage
-
-- **Parsing & Intent Classification**: The agent extracts target entities, time bounds, and administrative constraints.
-- **Constraint Validation**: Evaluates capacity caps, prerequisite rules, and room availability against the ingested dataset.
-- **Autonomous Reasoning & Thinking**: Computes optimal slot assignments, resolving detected schedule overlaps iteratively.
-- **Telemetry Broadcasting**: Streams step-by-step execution status and internal reasoning checkpoints to the UI dashboard.
-
-### 3. Output Stage
-
-- **Timetable Matrices**: Complete schedule tables grouped by day, time slot, lecturer, and room allocation.
-- **Approved Study Plans (KRS)**: Validated student enrollment cards with assigned course codes and total credits.
-- **Enrolment Certificates**: Formatted academic standing documents containing verification metadata.
-- **Execution Summary**: Performance log summarizing processed records, verified constraints, execution time, and resolution status.
+3. **Zero-Build Vanilla Architecture**:
+   - Tampilan antarmuka Blade terintegrasi langsung dengan aset statis vanilla JavaScript dan CSS (`public/js/pensceduler.js` dan `public/css/pensceduler.css`). Aplikasi berjalan langsung tanpa membutuhkan runtime Node.js, npm, webpack, maupun Vite build step.
 
 ---
 
-## 4. Architecture & Data Flow
+## User Disclosure: Penggunaan AI di dalam Aplikasi
 
-```
-┌────────────────────────────────────────────────────────┐
-│                      Web Client UI                     │
-│  ┌───────────────────┬───────────────────────────────┐ │
-│  │ Source Upload UI  │ Agent Status & Thinking Trace │ │
-│  └───────────────────┴───────────────────────────────┘ │
-└───────────────────────────┬────────────────────────────┘
-                            │ API / IPC
-┌───────────────────────────▼────────────────────────────┐
-│                    Agent Core Pipeline                 │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ Intent Classifier & Parameter Extractor          │  │
-│  └────────────────────────┬─────────────────────────┘  │
-│                           ▼                            │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ Constraint & Heuristics Engine                   │  │
-│  │ - Room Capacity Checker                          │  │
-│  │ - Credit Limit (SKS) Validator                   │  │
-│  │ - Time Slot Collision Resolver                   │  │
-│  └────────────────────────┬─────────────────────────┘  │
-│                           ▼                            │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ Document & Matrix Generator                      │  │
-│  │ - KRS Record Builder                             │  │
-│  │ - Schedule Grid Exporter                         │  │
-│  │ - Certificate Builder                            │  │
-│  └──────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────┘
-```
+Aplikasi ini mengintegrasikan kemampuan AI dengan batasan arsitektur yang ketat untuk menjamin keandalan data, integritas akademik, dan perlindungan privasi.
+
+### Untuk Apa AI Digunakan?
+
+1. **Natural Language Intent Parsing**:
+   - Menerjemahkan instruksi percakapan bebas dari dosen atau mahasiswa di antarmuka chat menjadi parameter pencarian jadwal terstruktur (mata kuliah target, preferensi hari, rentang jam, dan durasi pergantian).
+
+2. **Konsultasi & Penjelasan Jadwal (Conversational Explanation)**:
+   - Menerjemahkan daftar kandidat slot bebas bentrok yang dihitung oleh mesin penjadwalan menjadi bahasa alami yang ramah pengguna, lengkap dengan konteks perbandingan antar opsi.
+
+3. **Isolasi Akses Tulis (Read-Only AI Ingress)**:
+   - Keluaran AI hanya disimpan sebagai draf sementara pada tabel `ai_drafts`. AI **tidak memiliki akses tulis langsung** ke tabel jadwal produksi maupun booking ruangan. Perubahan jadwal hanya terjadi setelah konfirmasi eksplisit dari pengguna atau persetujuan BAAK.
+
+### Untuk Apa AI TIDAK Digunakan?
+
+- **Bukan untuk Perhitungan Jadwal**: Model bahasa (LLM) **sama sekali tidak digunakan** untuk menghitung ketersediaan jam, mendeteksi bentrok jadwal, mengecek kapasitas ruangan, atau menentukan peringkat slot. Seluruh perhitungan matematis jadwal dilakukan secara deterministik 100% oleh pure PHP bitmask engine (`app/Domain/Scheduling`).
+- **Bebas Halusinasi Alokasi**: Karena LLM hanya memformat hasil kalkulasi slot yang sudah tervalidasi oleh mesin bitmask, alokasi jadwal bebas dari risiko halusinasi AI.
+
+### Kemampuan Offline & Privasi Data
+
+- **Fallback Deterministik**: Jika endpoint API AI (OpenAI / 9Router) tidak tersedia atau `AI_CHAT_API_KEY` tidak diisi, sistem otomatis beralih ke generator template aturan internal. Seluruh fitur aplikasi dan konsultasi chat tetap berfungsi normal secara offline tanpa penyedia AI eksternal.
+- **Privasi Terjaga**: Tidak ada data identitas sensitif mahasiswa (seperti nomor kontak pribadi) yang dikirimkan ke layanan AI pihak ketiga. Data bentrok mahasiswa diagregasikan secara anonim.
 
 ---
 
-## 5. Getting Started
+## Cara Clone dan Menjalankan Aplikasi (Setup & Run Guide)
 
-### Prerequisites
+Aplikasi ini menggunakan stack Laravel murni yang menyajikan aset frontend secara langsung dari direktori `public/`. **Tidak memerlukan Node.js maupun npm sama sekali.**
 
-- Node.js (v18.0.0 or higher) / Python (v3.10 or higher depending on runtime selected)
-- Package manager: `npm`, `pnpm`, or `pip`
+### Kebutuhan Sistem (Prerequisites)
 
-### Installation
+- **PHP**: Versi >= 8.2 (disarankan PHP 8.3) dengan ekstensi aktif:
+  - `pdo`, `sqlite3` (atau `pdo_sqlite`)
+  - `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype`, `curl`
+- **Composer**: Versi >= 2.7
+- **Git**
 
-1. Clone the repository:
+### Langkah Menjalankan
+
+1. **Clone Repository**:
 
    ```bash
-   git clone https://github.com/<org>/HACKATHON-Scheduler.git
-   cd HACKATHON-Scheduler
+   git clone https://github.com/geneva-1967/hackathon-scheduler.git
+   cd hackathon-scheduler
    ```
 
-2. Install dependencies:
+2. **Install Dependensi PHP**:
 
    ```bash
-   npm install
+   composer install
    ```
 
-   *(or* `pip install -r requirements.txt` *if running Python backend service)*
+3. **Konfigurasi Environment**:
 
-3. Configure environment parameters:
+   Salin file `.env.example` menjadi `.env` lalu buat kunci aplikasi:
 
    ```bash
    cp .env.example .env
+   php artisan key:generate
    ```
 
-   Provide valid configuration parameters (e.g., API keys, gateway endpoints, server port).
+4. **Inisialisasi Database (SQLite)**:
 
-4. Run development server:
+   Aplikasi dikonfigurasi menggunakan SQLite bawaan:
 
    ```bash
-   npm run dev
+   touch database/database.sqlite
+   php artisan migrate:fresh --seed
    ```
 
-5. Open application interface: Navigate to `http://localhost:3000` in your web browser.
+5. **Jalankan Server Aplikasi**:
+
+   ```bash
+   php artisan serve
+   ```
+
+6. **Buka Aplikasi di Browser**:
+
+   Akses tautan berikut di browser:
+   ```text
+   http://127.0.0.1:8000
+   ```
+
+### Konfigurasi Opsional AI Gateway
+
+Untuk menghubungkan asisten chat dengan LLM eksternal, atur kredensial berikut di file `.env`:
+
+```env
+AI_CHAT_BASE_URL=https://api.openai.com/v1
+AI_CHAT_API_KEY=your_api_key_here
+AI_CHAT_MODEL_ID=gpt-4o-mini
+```
+
+*Catatan: Jika dikosongkan, fitur chat otomatis menggunakan generator offline bawaan tanpa error.*
 
 ---
 
-## 6. Demonstration Guide
+## Lisensi (License)
 
-To demonstrate the full MVP flow:
-
-1. **Upload Academic Source Data**: Navigate to the Data Source tab, upload course roster and room matrices (sample templates available in `data/samples/`).
-2. **Execute Schedule Generation**: Submit scheduling parameters via the Admin prompt. Observe the real-time thinking trace panel as the agent identifies overlaps and allocates slots.
-3. **Inspect Timetable Matrix**: Review the generated conflict-free grid and verify lecturer and room assignments.
-4. **Process KRS & Enrolment Certificate**: Trigger student validation for a designated student ID to inspect automated SKS boundary verification and instant certificate generation.
-5. **Review Execution Summary**: Confirm all processing steps in the task summary log.
-
----
-
-## 7. Data Privacy & Compliance
-
-All test datasets and operational records used by this system strictly follow privacy-safe design principles:
-
-- No real government identifiers or national identity cards (KTP) are processed or stored.
-- All student names, registration numbers, and instructor allocations are synthetic.
-- File uploads are validated in-memory and sanitized against prompt injection and arbitrary file execution.
+Proyek ini dilisensikan di bawah lisensi terbuka [MIT License](LICENSE).
