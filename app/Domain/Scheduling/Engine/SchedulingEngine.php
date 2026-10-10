@@ -34,13 +34,16 @@ class SchedulingEngine
         $this->rules = $input->rules;
         $this->timeSlots = $this->generateTimeSlots();
 
-        $this->addStep(1, 'Ambil bahan', array_merge($input->toArray(), [
+        $this->addStep(1, 'Ambil data & waktu belajar', array_merge($input->toArray(), [
             'scope' => $request->scope->value,
             'target_week' => $request->targetWeek,
             'weeks_to_evaluate' => $request->weeksToEvaluate,
         ]));
 
+        // cek jadwal
         $this->assertSchedulesFitGrid(array_merge($input->lecturerSchedules, $input->studentSchedules, $allSchedules));
+        
+        // bangun bitmask
         $bitmasks = $this->buildBitmasks($input->lecturerSchedules);
 
         $this->addStep(2, 'Bangun bitmask', [
@@ -48,12 +51,14 @@ class SchedulingEngine
             'slots_per_day' => count($this->timeSlots),
         ]);
 
+        // cari jendela slot yang berurutan
         $candidates = $this->findConsecutiveSlots($bitmasks, $input->requiredSlots);
 
         $this->addStep(3, 'Cari jendela slot', [
             'candidates_found' => count($candidates),
         ]);
 
+        // cari slot yang memiliki jeda (istirahat)
         $candidatesWithJumping = $this->findSlotsWithJumping($bitmasks, $input->requiredSlots);
 
         $this->addStep('3b', 'Slot jumping (lompati istirahat)', [
@@ -103,7 +108,7 @@ class SchedulingEngine
         $this->rules = $input->rules;
         $this->timeSlots = $this->generateTimeSlots();
 
-        $this->addStep(1, 'Ambil bahan', array_merge($input->toArray(), [
+        $this->addStep(1, 'Ambil data & waktu belajar', array_merge($input->toArray(), [
             'scope' => $request->scope->value,
             'target_week' => $request->targetWeek,
             'weeks_to_evaluate' => $request->weeksToEvaluate,
@@ -338,12 +343,14 @@ class SchedulingEngine
         foreach (DayOfWeek::cases() as $day) {
             $bitmask = 0;
 
+            // apakah slot jadwal terkendala (misal jam istirahat) 
             foreach ($this->timeSlots as $slot) {
                 if ($this->isSlotBlocked($slot, $day)) {
                     $bitmask |= (1 << $slot['slot_index']);
                 }
             }
 
+            // apakah slot jadwal dosen bentrok dengan jadwal lain
             foreach ($lecturerSchedules as $schedule) {
                 if ($schedule->day === $day->value) {
                     for ($i = $schedule->startSlot; $i <= $schedule->endSlot; $i++) {
@@ -398,9 +405,11 @@ class SchedulingEngine
     {
         $candidates = [];
 
+        // cari slot berurutan yang memenuhi syarat 
         foreach ($bitmasks as $dayValue => $bitmask) {
             $day = DayOfWeek::from($dayValue);
 
+            // cari jendela slot berurutan yang tersedia
             for ($i = 0; $i <= count($this->timeSlots) - $requiredSlots; $i++) {
                 $windowMask = 0;
                 for ($j = 0; $j < $requiredSlots; $j++) {
@@ -514,6 +523,7 @@ class SchedulingEngine
     {
         $filtered = [];
 
+        // filter kandidat berdasarkan ketersediaan ruangan
         foreach ($candidates as $candidate) {
             foreach ($rooms as $room) {
                 if ($room->capacity >= $totalStudents) {
