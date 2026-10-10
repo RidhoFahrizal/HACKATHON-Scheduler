@@ -266,10 +266,16 @@
                   <h2 class="view-title">Master Ruangan Perkuliahan</h2>
                   <p class="view-subtitle">Daftar seluruh laboratorium dan ruang kelas teori kampus terdaftar di database.</p>
                 </div>
-                <button type="button" class="btn-primary-action" onclick="openBaakCrudModal('room')">
+                <div class="view-header-actions">
+                  <button type="button" class="btn-secondary-action" onclick="openCsvImportModal('rooms')">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>Impor CSV</span>
+                  </button>
+                  <button type="button" class="btn-primary-action" onclick="openBaakCrudModal('room')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   <span>Tambah Ruangan</span>
                 </button>
+                </div>
               </div>
 
               <div class="clean-section-card">
@@ -296,10 +302,16 @@
                   <h2 class="view-title">Master Subjek Perkuliahan</h2>
                   <p class="view-subtitle">Daftar seluruh mata kuliah kurikulum akademik aktif dan bobot satuan kredit semester (SKS).</p>
                 </div>
-                <button type="button" class="btn-primary-action" onclick="openBaakCrudModal('subject')">
+                <div class="view-header-actions">
+                  <button type="button" class="btn-secondary-action" onclick="openCsvImportModal('subjects')">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>Impor CSV</span>
+                  </button>
+                  <button type="button" class="btn-primary-action" onclick="openBaakCrudModal('subject')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   <span>Tambah Subjek</span>
                 </button>
+                </div>
               </div>
 
               <div class="clean-section-card">
@@ -326,10 +338,16 @@
                   <h2 class="view-title">Daftar Dosen Pengampu</h2>
                   <p class="view-subtitle">Data tenaga pengajar aktif Departemen Teknik Informatika dan Rekayasa.</p>
                 </div>
-                <button type="button" class="btn-primary-action" onclick="openBaakCrudModal('lecturer')">
+                <div class="view-header-actions">
+                  <button type="button" class="btn-secondary-action" onclick="openCsvImportModal('lecturers')">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>Impor CSV</span>
+                  </button>
+                  <button type="button" class="btn-primary-action" onclick="openBaakCrudModal('lecturer')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   <span>Tambah Dosen</span>
                 </button>
+                </div>
               </div>
 
               <div class="clean-section-card">
@@ -355,10 +373,16 @@
                   <h2 class="view-title">Daftar Mahasiswa Terdaftar</h2>
                   <p class="view-subtitle">Data mahasiswa aktif, nomor registrasi pokok (NRP), angkatan, dan program studi.</p>
                 </div>
-                <button type="button" class="btn-primary-action" onclick="openBaakCrudModal('student')">
+                <div class="view-header-actions">
+                  <button type="button" class="btn-secondary-action" onclick="openCsvImportModal('students')">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>Impor CSV</span>
+                  </button>
+                  <button type="button" class="btn-primary-action" onclick="openBaakCrudModal('student')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   <span>Tambah Mahasiswa</span>
                 </button>
+                </div>
               </div>
 
               <div class="clean-section-card">

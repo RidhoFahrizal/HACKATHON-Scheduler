@@ -235,9 +235,45 @@ document.addEventListener("DOMContentLoaded", () => {
   setupDashboardDragCarousel();
   setupClassesViewInteractions();
   setupChatModule();
+  setupCsvDropArea();
+  setupChatSlotDelegation();
   renderActiveRole(currentRole);
   loadSchedulingCatalog();
+  loadRescheduleRequests();
+  loadMasterData();
 });
+
+async function apiRequest(method, url, body) {
+  const token = document.querySelector('meta[name="csrf-token"]');
+  let response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-CSRF-TOKEN": token ? token.content : ""
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+  } catch (networkError) {
+    const error = new Error("Server tidak terjangkau.");
+    error.offline = true;
+    throw error;
+  }
+
+  if (response.status === 204) return null;
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload.message || "Permintaan ke server gagal.");
+    error.status = response.status;
+    error.payload = payload;
+    error.offline = response.status >= 500;
+    throw error;
+  }
+  return payload;
+}
 
 async function loadSchedulingCatalog() {
   try {
@@ -299,7 +335,7 @@ function getSchedulingClass(courseId) {
 }
 
 function initThemeAndAccessibility() {
-  const savedTheme = localStorage.getItem("penscheduler_theme") || "light";
+  const savedTheme = localStorage.getItem("penscheduler_theme") || "auto";
   setAppTheme(savedTheme);
 
   const isDyslexia = localStorage.getItem("penscheduler_dyslexia") === "true";
@@ -1063,38 +1099,100 @@ function renderFullClassesView() {
   `).join("");
 }
 
+function mapApiRequestToLedger(request) {
+  return {
+    id: request.id,
+    uuid: request.uuid,
+    courseId: request.courseId,
+    courseTitle: request.courseTitle,
+    lecturerName: request.lecturerName,
+    requesterRole: request.requesterRole,
+    requesterName: request.requesterName,
+    originalSchedule: request.originalSchedule,
+    proposedSchedule: request.proposedSchedule,
+    reason: request.reason,
+    status: request.status,
+    submittedAt: request.submittedAt
+  };
+}
+
+async function loadRescheduleRequests() {
+  try {
+    const result = await apiRequest("GET", "/api/v1/reschedule-requests");
+    const remote = (result.data || []).map(mapApiRequestToLedger);
+    if (remote.length === 0) return;
+
+    const remoteIds = new Set(remote.map(item => item.id));
+    ALL_RESCHEDULE_REQUESTS.splice(
+      0,
+      ALL_RESCHEDULE_REQUESTS.length,
+      ...remote,
+      ...ALL_RESCHEDULE_REQUESTS.filter(item => !remoteIds.has(item.id))
+    );
+    if (currentRole === "baak") renderBaakFullRequestsTable();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function findPendingRequestUuid(requestId) {
+  return ALL_RESCHEDULE_REQUESTS.find(item => item.id === requestId)?.uuid || null;
+}
+
+function reviewRequestRemotely(action, requestId, reviewNotes) {
+  const uuid = findPendingRequestUuid(requestId);
+  if (!uuid) return Promise.resolve(null);
+  return apiRequest("POST", `/api/v1/reschedule-requests/${uuid}/${action}`, reviewNotes ? { reviewNotes } : {});
+}
+
 function approveShiftRequest(requestId, classId) {
-  const dosenClasses = APP_DATA.dosen.classes;
-  const targetClass = dosenClasses.find(c => c.id === classId);
-  if (targetClass) {
-    targetClass.hasPendingRequest = false;
-    targetClass.hasShift = true;
-    targetClass.shiftedSchedule = `${targetClass.pendingRequestDetail.targetDay}, ${targetClass.pendingRequestDetail.targetTime} di ${targetClass.pendingRequestDetail.targetRoom} (Disetujui)`;
-  }
+  const applyLocally = () => {
+    const targetClass = APP_DATA.dosen.classes.find(c => c.id === classId);
+    if (targetClass) {
+      targetClass.hasPendingRequest = false;
+      targetClass.hasShift = true;
+      targetClass.shiftedSchedule = `${targetClass.pendingRequestDetail.targetDay}, ${targetClass.pendingRequestDetail.targetTime} di ${targetClass.pendingRequestDetail.targetRoom} (Disetujui)`;
+    }
+    const req = ALL_RESCHEDULE_REQUESTS.find(r => r.id === requestId);
+    if (req) req.status = "Disetujui";
+    renderActiveRole("dosen");
+    showToast("Permintaan perpindahan jadwal telah DISETUJUI.");
+  };
 
-  const req = ALL_RESCHEDULE_REQUESTS.find(r => r.id === requestId);
-  if (req) {
-    req.status = "Disetujui";
-  }
-
-  renderActiveRole("dosen");
-  showToast("Permintaan perpindahan jadwal telah DISETUJUI.");
+  showToast("Memeriksa bentrok dan menerapkan perubahan jadwal...");
+  reviewRequestRemotely("approve", requestId)
+    .then(applyLocally)
+    .catch(error => {
+      if (error.offline) {
+        applyLocally();
+        return;
+      }
+      const detail = Array.isArray(error.payload?.conflicts) && error.payload.conflicts.length > 0
+        ? ` ${error.payload.conflicts.join(" ")}`
+        : "";
+      showToast(`${error.message}${detail}`);
+    });
 }
 
 function rejectShiftRequest(requestId, classId) {
-  const dosenClasses = APP_DATA.dosen.classes;
-  const targetClass = dosenClasses.find(c => c.id === classId);
-  if (targetClass) {
-    targetClass.hasPendingRequest = false;
-  }
+  const applyLocally = () => {
+    const targetClass = APP_DATA.dosen.classes.find(c => c.id === classId);
+    if (targetClass) targetClass.hasPendingRequest = false;
+    const req = ALL_RESCHEDULE_REQUESTS.find(r => r.id === requestId);
+    if (req) req.status = "Ditolak";
+    renderActiveRole("dosen");
+    showToast("Permintaan perpindahan jadwal DITOLAK.");
+  };
 
-  const req = ALL_RESCHEDULE_REQUESTS.find(r => r.id === requestId);
-  if (req) {
-    req.status = "Ditolak";
-  }
-
-  renderActiveRole("dosen");
-  showToast("Permintaan perpindahan jadwal DITOLAK.");
+  reviewRequestRemotely("reject", requestId, "Ditolak oleh dosen pengampu.")
+    .then(applyLocally)
+    .catch(error => {
+      if (error.offline) {
+        applyLocally();
+        return;
+      }
+      showToast(error.message);
+    });
 }
 
 function openClassDetailView(classId) {
@@ -1394,6 +1492,70 @@ function renderMockRecommendationSlots(container) {
   `).join("");
 }
 
+function setRecommendationStatus(state, text) {
+  const box = document.getElementById("recommendation-status");
+  const label = document.getElementById("recommendation-status-text");
+  if (!box || !label) return;
+
+  if (!state) {
+    box.style.display = "none";
+    return;
+  }
+
+  box.style.display = "flex";
+  box.classList.toggle("done", state === "done");
+  box.classList.toggle("failed", state === "failed");
+  label.textContent = text;
+}
+
+function runRecommendationEngine(container, scheduleId, scope, targetDate) {
+  container.innerHTML = "";
+  setRecommendationStatus("busy", "Algoritma bitmask menyusun jadwal dosen dan mahasiswa...");
+
+  const engineStages = [
+    "Algoritma bitmask menyusun jadwal dosen dan mahasiswa...",
+    "Mencari jendela slot kosong berurutan...",
+    "Menyaring ruang berdasarkan kapasitas dan bentrok...",
+    "Menghitung skor tiap kandidat..."
+  ];
+  let stage = 0;
+  const timer = window.setInterval(() => {
+    stage = Math.min(stage + 1, engineStages.length - 1);
+    setRecommendationStatus("busy", engineStages[stage]);
+  }, 1200);
+
+  return apiRequest("POST", "/api/scheduling/evaluate", { scheduleId, scope, target: targetDate })
+    .finally(() => window.clearInterval(timer));
+}
+
+function renderEngineOptions(container, options) {
+  container.innerHTML = options.map((option, index) => `
+    <div class="overlay-rec-card">
+      <div class="overlay-rec-header">
+        <span class="overlay-rec-day">${escapeHtml(option.day)}</span>
+        <span class="overlay-rec-badge">Skor ${Number(option.score)}</span>
+      </div>
+      <div class="overlay-rec-time">${escapeHtml(option.start_time)} - ${escapeHtml(option.end_time)}</div>
+      <div class="overlay-rec-room">Ruangan: <strong>${escapeHtml(option.room_name)}</strong></div>
+      <button type="button" class="btn-card-action primary apply-engine-option" data-option-index="${index}" style="width: 100%; margin-top: 10px;">
+        Pilih Slot Ini &rarr;
+      </button>
+    </div>
+  `).join("");
+
+  container.querySelectorAll(".apply-engine-option").forEach(button => {
+    button.addEventListener("click", () => {
+      const option = options[Number(button.dataset.optionIndex)];
+      const time = `${option.start_time} - ${option.end_time}`;
+      const timeSelect = document.getElementById("reschedule-target-time");
+      if (timeSelect && ![...timeSelect.options].some(item => item.value === time)) {
+        timeSelect.add(new Option(time, time));
+      }
+      applyRecommendationSlot(option.day, time, option.room_name);
+    });
+  });
+}
+
 function requestSystemRecommendations() {
   const modal = document.getElementById("recommendations-overlay-modal");
   const container = document.getElementById("modal-recommendations-container");
@@ -1416,53 +1578,27 @@ function requestSystemRecommendations() {
     : selectedText.split("(")[0].trim();
   modal.style.display = "flex";
 
-  // Mock slots keep the form handoff usable when the course is not in the database catalog or the engine is unreachable.
   if (!useEngine) {
+    setRecommendationStatus(null);
     renderMockRecommendationSlots(container);
     return;
   }
 
-  container.innerHTML = '<p class="view-subtitle">Engine sedang menghitung slot dan memeriksa bentrok...</p>';
-
-  fetch("/api/scheduling/evaluate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ scheduleId, scope, target: targetDate })
-  }).then(async response => {
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.message || "Permintaan rekomendasi gagal.");
-
-    const options = Array.isArray(result.options) ? result.options : [];
-    if (options.length === 0) {
-      container.innerHTML = `<p class="view-subtitle">${result.success ? "Tidak ada opsi." : "Tidak ditemukan slot yang memenuhi aturan engine."}</p>`;
-      return;
-    }
-
-    container.innerHTML = options.map((option, index) => `
-      <div class="overlay-rec-card">
-        <div class="overlay-rec-header">
-          <span class="overlay-rec-day">${escapeHtml(option.day)}</span>
-          <span class="overlay-rec-badge">Skor ${Number(option.score)}</span>
-        </div>
-        <div class="overlay-rec-time">${escapeHtml(option.start_time)} - ${escapeHtml(option.end_time)}</div>
-        <div class="overlay-rec-room">Ruangan: <strong>${escapeHtml(option.room_name)}</strong></div>
-        <button type="button" class="btn-card-action primary apply-engine-option" data-option-index="${index}" style="width: 100%; margin-top: 10px;">
-          Pilih Slot Ini &rarr;
-        </button>
-      </div>
-    `).join("");
-
-    container.querySelectorAll(".apply-engine-option").forEach(button => {
-      button.addEventListener("click", () => {
-        const option = options[Number(button.dataset.optionIndex)];
-        applyRecommendationSlot(option.day, `${option.start_time} - ${option.end_time}`, option.room_name);
-      });
+  runRecommendationEngine(container, scheduleId, scope, targetDate)
+    .then(result => {
+      const options = Array.isArray(result.options) ? result.options : [];
+      if (options.length === 0) {
+        setRecommendationStatus("failed", "Tidak ditemukan slot yang memenuhi aturan engine.");
+        return;
+      }
+      setRecommendationStatus("done", `Algoritma selesai: ${options.length} opsi bebas konflik ditemukan.`);
+      renderEngineOptions(container, options);
+    })
+    .catch(error => {
+      console.error(error);
+      setRecommendationStatus("failed", "Engine tidak tersedia; menampilkan slot contoh.");
+      renderMockRecommendationSlots(container);
     });
-  }).catch(error => {
-    console.error(error);
-    renderMockRecommendationSlots(container);
-    showToast("Engine tidak tersedia; menampilkan slot contoh.");
-  });
 }
 
 function closeRecommendationOverlay() {
@@ -1483,12 +1619,21 @@ function applyRecommendationSlot(day, time, room) {
   showToast(`Slot rekomendasi ${day} (${time} di ${room}) diterapkan ke formulir.`);
 }
 
+const DURATION_CODES = {
+  "1 Pekan (Sesi Pengganti)": "1_minggu",
+  "2 Pekan": "2_minggu",
+  "3 Pekan": "3_minggu",
+  "4 Pekan": "4_minggu",
+  "Permanen (Sisa Semester)": "permanen"
+};
+
 function submitRescheduleRequest() {
   const courseSelect = document.getElementById("reschedule-course-select");
   const targetDay = document.getElementById("reschedule-target-day");
   const targetTime = document.getElementById("reschedule-target-time");
   const targetRoom = document.getElementById("reschedule-target-room");
   const durationSelect = document.getElementById("reschedule-duration-select");
+  const submitButton = document.getElementById("btn-submit-reschedule");
 
   if (!courseSelect || !courseSelect.value) {
     showToast("Silakan pilih matakuliah terlebih dahulu.");
@@ -1498,37 +1643,94 @@ function submitRescheduleRequest() {
   const courseTitle = courseSelect.options[courseSelect.selectedIndex].text.split("(")[0].trim();
   const isMahasiswa = currentRole === "mahasiswa";
   const isDosen = currentRole === "dosen";
-  const isBaak = currentRole === "baak";
+  const scheduleId = courseSelect.value;
+  const persisted = DATABASE_SCHEDULES.some(item => item.id === scheduleId);
 
-  const status = isMahasiswa ? "Menunggu Persetujuan Dosen" : "Disetujui";
+  const applyLocally = () => {
+    const newRequest = {
+      id: `REQ-${Date.now().toString().slice(-4)}`,
+      courseId: scheduleId,
+      courseTitle: courseTitle,
+      lecturerName: isDosen ? APP_DATA.dosen.name : isMahasiswa ? "Dr. Ir. Budi Sxxxx, M.T." : "BAAK",
+      requesterRole: APP_DATA[currentRole].roleLabel,
+      requesterName: APP_DATA[currentRole].name,
+      originalSchedule: "Jadwal Reguler",
+      proposedSchedule: `${targetDay.value}, ${targetTime.value} (${targetRoom.value})`,
+      reason: `Perpindahan sesi perkuliahan (${durationSelect.value})`,
+      status: isMahasiswa ? "Menunggu Persetujuan Dosen" : "Disetujui",
+      submittedAt: "09 Okt 2026 14:30"
+    };
 
-  const newRequest = {
-    id: `REQ-${Date.now().toString().slice(-4)}`,
-    courseId: courseSelect.value,
-    courseTitle: courseTitle,
-    lecturerName: isDosen ? APP_DATA.dosen.name : isMahasiswa ? "Dr. Ir. Budi Sxxxx, M.T." : "BAAK",
-    requesterRole: APP_DATA[currentRole].roleLabel,
-    requesterName: APP_DATA[currentRole].name,
-    originalSchedule: "Jadwal Reguler",
-    proposedSchedule: `${targetDay.value}, ${targetTime.value} (${targetRoom.value})`,
-    reason: `Perpindahan sesi perkuliahan (${durationSelect.value})`,
-    status: status,
-    submittedAt: "09 Okt 2026 14:30"
+    ALL_RESCHEDULE_REQUESTS.unshift(newRequest);
+
+    if (!isMahasiswa) {
+      const c = getSchedulingClass(scheduleId);
+      if (c) {
+        c.hasShift = true;
+        c.shiftedSchedule = `${targetDay.value}, ${targetTime.value} di ${targetRoom.value} (${durationSelect.value})`;
+      }
+    }
+
+    renderActiveRole(currentRole);
+    showToast(isMahasiswa ? "Permohonan berhasil diajukan. Menunggu persetujuan dosen." : "Jadwal perkuliahan berhasil diperbarui (Otomatis Disetujui).");
   };
 
-  ALL_RESCHEDULE_REQUESTS.unshift(newRequest);
-
-  if (!isMahasiswa) {
-    const profile = APP_DATA[currentRole];
-    const c = getSchedulingClass(courseSelect.value);
-    if (c) {
-      c.hasShift = true;
-      c.shiftedSchedule = `${targetDay.value}, ${targetTime.value} di ${targetRoom.value} (${durationSelect.value})`;
-    }
+  if (!persisted) {
+    applyLocally();
+    return;
   }
 
-  renderActiveRole(currentRole);
-  showToast(isMahasiswa ? "Permohonan berhasil diajukan. Menunggu persetujuan dosen." : "Jadwal perkuliahan berhasil diperbarui (Otomatis Disetujui).");
+  const [startTime, endTime] = targetTime.value.split(" - ");
+  const targetDate = document.getElementById("reschedule-target-date")?.value;
+  if (!targetDate) {
+    showToast("Tanggal mulai berlaku wajib diisi.");
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+  showToast("Mengirim pengajuan dan memeriksa bentrok jadwal...");
+
+  apiRequest("POST", "/api/v1/reschedule-requests", {
+    scheduleId,
+    targetDate,
+    targetDay: targetDay.value,
+    targetStartTime: startTime,
+    targetEndTime: endTime,
+    targetRoomName: targetRoom.value,
+    durationType: DURATION_CODES[durationSelect.value] || "1_minggu",
+    reason: `Perpindahan sesi perkuliahan (${durationSelect.value})`
+  })
+    .then(result => {
+      const created = mapApiRequestToLedger(result.data || result);
+      ALL_RESCHEDULE_REQUESTS.unshift(created);
+      renderActiveRole(currentRole);
+      loadSchedulingCatalog();
+      showToast(isMahasiswa ? "Permohonan berhasil diajukan. Menunggu persetujuan dosen." : "Jadwal perkuliahan berhasil diperbarui (Otomatis Disetujui).");
+    })
+    .catch(error => {
+      if (error.offline) {
+        applyLocally();
+        return;
+      }
+      const detail = Array.isArray(error.payload?.conflicts) && error.payload.conflicts.length > 0
+        ? ` ${error.payload.conflicts.join(" ")}`
+        : "";
+      showToast(`${error.message}${detail}`);
+    })
+    .finally(() => {
+      if (submitButton) submitButton.disabled = false;
+    });
+}
+
+function setupChatSlotDelegation() {
+  const stream = document.getElementById("chat-messages-stream");
+  if (!stream) return;
+
+  stream.addEventListener("click", event => {
+    const button = event.target.closest(".chat-apply-slot");
+    if (!button) return;
+    applyChatSlotToReschedule(button.dataset.courseId, button.dataset.day, button.dataset.time, button.dataset.room);
+  });
 }
 
 function setupChatModule() {
@@ -1653,24 +1855,9 @@ function triggerChatTemplate(templateId) {
   }
 }
 
-function generateChatRecommendations(courseId) {
-  if (!courseId) return;
-
-  const profile = APP_DATA[currentRole];
-  const c = profile.classes.find(item => item.id === courseId);
-  if (!c) return;
-
-  const isBaak = currentRole === "baak";
-  const prefix = isBaak ? `[${c.lecturer}] ` : "";
-
-  const slots = [
-    { day: "Rabu", time: "13:00 - 16:00", room: "Lab C 103", note: "Bebas Bentrok & Siap Digunakan" },
-    { day: "Kamis", time: "13:00 - 15:00", room: "SAW-06.10", note: "Kapasitas 40 Kursi" },
-    { day: "Jumat", time: "08:00 - 11:00", room: "Lab C 102", note: "Workstation Lengkap" }
-  ];
-
-  const html = `
-    <p>Ditemukan slot kosong rekomendasi sistem untuk <strong>${escapeHtml(prefix)}${escapeHtml(c.title)}</strong>:</p>
+function renderChatSlotCards(slots, courseId, headline) {
+  return `
+    <p>${headline}</p>
     <div class="chat-rec-cards-list">
       ${slots.map(s => `
         <div class="chat-rec-slot-card">
@@ -1679,15 +1866,112 @@ function generateChatRecommendations(courseId) {
             <span class="badge-rec-status" style="font-size: 10px;">${escapeHtml(s.note)}</span>
           </div>
           <div style="font-size: 11px; color: var(--text-subtle); margin: 4px 0;">Ruangan: <strong>${escapeHtml(s.room)}</strong></div>
-          <button type="button" class="btn-card-action primary" style="width: 100%; margin-top: 6px;" onclick="applyChatSlotToReschedule('${c.id}', '${s.day}', '${s.time}', '${s.room}')">
+          <button type="button" class="btn-card-action primary chat-apply-slot" style="width: 100%; margin-top: 6px;"
+            data-course-id="${escapeHtml(courseId)}" data-day="${escapeHtml(s.day)}" data-time="${escapeHtml(s.time)}" data-room="${escapeHtml(s.room)}">
             Terapkan ke Formulir Pindah Jadwal &rarr;
           </button>
         </div>
       `).join("")}
     </div>
   `;
+}
 
-  appendAiChatMessage(html);
+function generateChatRecommendations(courseId) {
+  if (!courseId) return;
+
+  const c = getSchedulingClass(courseId);
+  if (!c) return;
+
+  const prefix = currentRole === "baak" ? `[${c.lecturer}] ` : "";
+  const headline = `Ditemukan slot kosong rekomendasi sistem untuk <strong>${escapeHtml(prefix)}${escapeHtml(c.title)}</strong>:`;
+  const isPersisted = DATABASE_SCHEDULES.some(item => item.id === courseId);
+
+  const showMock = () => appendAiChatMessage(renderChatSlotCards(MOCK_CHAT_SLOTS, courseId, headline));
+
+  if (!isPersisted) {
+    showMock();
+    return;
+  }
+
+  const status = appendChatStatus("Algoritma bitmask sedang menghitung slot bebas konflik...");
+  requestChatReply(`Cari slot pengganti untuk ${c.title}`, courseId, status)
+    .then(reply => finishChatReply(status, reply, courseId, headline))
+    .catch(() => {
+      removeChatStatus(status);
+      showMock();
+    });
+}
+
+const MOCK_CHAT_SLOTS = [
+  { day: "Rabu", time: "13:00 - 16:00", room: "Lab C 103", note: "Bebas Bentrok & Siap Digunakan" },
+  { day: "Kamis", time: "13:00 - 15:00", room: "SAW-06.10", note: "Kapasitas 40 Kursi" },
+  { day: "Jumat", time: "08:00 - 11:00", room: "Lab C 102", note: "Workstation Lengkap" }
+];
+
+let chatSessionId = null;
+
+function appendChatStatus(text) {
+  const stream = document.getElementById("chat-messages-stream");
+  if (!stream) return null;
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble ai";
+  bubble.innerHTML = `
+    <div class="chat-bubble-avatar">AI</div>
+    <div class="chat-bubble-content">
+      <div class="process-status" role="status" aria-live="polite">
+        <span class="process-spinner" aria-hidden="true"></span>
+        <span class="chat-status-text">${escapeHtml(text)}</span>
+      </div>
+    </div>
+  `;
+  stream.appendChild(bubble);
+  stream.scrollTop = stream.scrollHeight;
+  return bubble;
+}
+
+function updateChatStatus(bubble, text) {
+  const label = bubble?.querySelector(".chat-status-text");
+  if (label) label.textContent = text;
+}
+
+function removeChatStatus(bubble) {
+  if (bubble && bubble.parentNode) bubble.parentNode.removeChild(bubble);
+}
+
+function requestChatReply(message, scheduleId, statusBubble) {
+  const payload = { message };
+  if (scheduleId) {
+    payload.scheduleId = scheduleId;
+    payload.scope = "once";
+    payload.target = new Date().toISOString().slice(0, 10);
+  }
+  if (chatSessionId) payload.sessionId = chatSessionId;
+
+  const stages = scheduleId
+    ? ["Algoritma bitmask sedang menghitung slot bebas konflik...", "Asisten AI menyusun penjelasan..."]
+    : ["Asisten AI menyusun jawaban..."];
+  let stage = 0;
+  const timer = window.setInterval(() => {
+    stage = Math.min(stage + 1, stages.length - 1);
+    updateChatStatus(statusBubble, stages[stage]);
+  }, 2500);
+  updateChatStatus(statusBubble, stages[0]);
+
+  return apiRequest("POST", "/api/v1/chat/message", payload).finally(() => window.clearInterval(timer));
+}
+
+function finishChatReply(statusBubble, reply, courseId, fallbackHeadline) {
+  removeChatStatus(statusBubble);
+  if (reply.sessionId) chatSessionId = reply.sessionId;
+
+  const slots = Array.isArray(reply.slots) ? reply.slots : [];
+  const body = `<p>${escapeHtml(reply.reply || "")}</p>`;
+  if (slots.length > 0 && courseId) {
+    appendAiChatMessage(body + renderChatSlotCards(slots, courseId, escapeHtml(fallbackHeadline ? "Opsi dari algoritma bitmask:" : "Opsi:")));
+  } else {
+    appendAiChatMessage(body);
+  }
 }
 
 function applyChatSlotToReschedule(courseId, day, time, room) {
@@ -1697,6 +1981,16 @@ function applyChatSlotToReschedule(courseId, day, time, room) {
     courseSelect.value = courseId;
     onRescheduleCourseChange(courseId);
   }
+
+  const roomSelect = document.getElementById("reschedule-target-room");
+  if (roomSelect && ![...roomSelect.options].some(option => option.value === room)) {
+    roomSelect.add(new Option(room, room));
+  }
+  const timeSelect = document.getElementById("reschedule-target-time");
+  if (timeSelect && ![...timeSelect.options].some(option => option.value === time)) {
+    timeSelect.add(new Option(time, time));
+  }
+
   applyRecommendationSlot(day, time, room);
   showToast("Parameter rekomendasi dari AI berhasil diterapkan ke formulir.");
 }
@@ -1711,9 +2005,13 @@ function handleUserChatMessage() {
   appendUserChatMessage(text);
   input.value = "";
 
-  setTimeout(() => {
-    appendAiChatMessage(`Terima kasih atas pesan Anda: "${escapeHtml(text)}". Anda dapat memanfaatkan tombol template cepat di bagian atas untuk pengecekan jadwal atau pencarian slot pemindahan perkuliahan.`);
-  }, 500);
+  const status = appendChatStatus("Asisten AI menyusun jawaban...");
+  requestChatReply(text, null, status)
+    .then(reply => finishChatReply(status, reply, null, ""))
+    .catch(() => {
+      removeChatStatus(status);
+      appendAiChatMessage(`Terima kasih atas pesan Anda: "${escapeHtml(text)}". Anda dapat memanfaatkan tombol template cepat di bagian atas untuk pengecekan jadwal atau pencarian slot pemindahan perkuliahan.`);
+    });
 }
 
 function appendUserChatMessage(text) {
@@ -1748,6 +2046,111 @@ function appendAiChatMessage(htmlContent) {
   stream.scrollTop = stream.scrollHeight;
 }
 
+const BUILDING_CODES = {
+  "Gedung D4": "D4",
+  "Gedung D3": "D3",
+  "Gedung Pasca": "PASCA",
+  "Gedung SAW": "SAW"
+};
+
+const MASTER_ENTITIES = {
+  room: { endpoint: "rooms", label: "Ruangan Perkuliahan", list: () => BAAK_MASTER_ROOMS, render: () => renderBaakRoomsTable() },
+  subject: { endpoint: "subjects", label: "Subjek Perkuliahan", list: () => BAAK_MASTER_SUBJECTS, render: () => renderBaakSubjectsTable() },
+  lecturer: { endpoint: "lecturers", label: "Dosen Pengampu", list: () => BAAK_MASTER_LECTURERS, render: () => renderBaakLecturersTable() },
+  student: { endpoint: "students", label: "Mahasiswa", list: () => BAAK_MASTER_STUDENTS, render: () => renderBaakStudentsTable() }
+};
+
+function mapRoomFromApi(room) {
+  return {
+    id: room.id,
+    code: room.code,
+    name: room.name,
+    building: room.building?.name || "",
+    building_code: room.building?.code || "",
+    capacity: room.capacity,
+    type: room.type,
+    floor: room.floor
+  };
+}
+
+function mapSubjectFromApi(subject) {
+  return {
+    id: subject.id,
+    code: subject.code || "",
+    name: subject.name,
+    sks: subject.sks ?? subject.credits,
+    semester: subject.semester ?? "",
+    department: subject.department || ""
+  };
+}
+
+function mapLecturerFromApi(lecturer) {
+  return {
+    id: lecturer.id,
+    name: lecturer.name,
+    nip: lecturer.nip || "",
+    code: lecturer.code || "",
+    academic_title: lecturer.academic_title || "",
+    department: lecturer.department || "",
+    email: lecturer.email || ""
+  };
+}
+
+function mapStudentFromApi(student) {
+  return {
+    id: student.id,
+    name: student.name,
+    nrp: student.nrp || "",
+    class: student.class || "",
+    cohort: String(student.cohort_year ?? ""),
+    major: student.department || "",
+    email: student.email || ""
+  };
+}
+
+const MASTER_MAPPERS = {
+  room: mapRoomFromApi,
+  subject: mapSubjectFromApi,
+  lecturer: mapLecturerFromApi,
+  student: mapStudentFromApi
+};
+
+function syncMasterStats() {
+  APP_DATA.baak.stats.ruangan = BAAK_MASTER_ROOMS.length;
+  APP_DATA.baak.stats.matakuliah = BAAK_MASTER_SUBJECTS.length;
+  APP_DATA.baak.stats.dosen = BAAK_MASTER_LECTURERS.length;
+  APP_DATA.baak.stats.mahasiswa = BAAK_MASTER_STUDENTS.length;
+  if (activeCurrentView === "dashboard" && currentRole === "baak") {
+    renderDashboardForRole("baak");
+  }
+}
+
+async function loadMasterData() {
+  for (const [entity, config] of Object.entries(MASTER_ENTITIES)) {
+    try {
+      const result = await apiRequest("GET", `/api/v1/${config.endpoint}`);
+      const rows = (result.data || []).map(MASTER_MAPPERS[entity]);
+      if (rows.length > 0) {
+        const list = config.list();
+        list.splice(0, list.length, ...rows);
+        config.render();
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  syncMasterStats();
+}
+
+function apiErrorMessage(error) {
+  const errors = error.payload?.errors;
+  if (errors) {
+    const first = Object.values(errors).flat()[0];
+    if (first) return first;
+  }
+  return error.message;
+}
+
 function openBaakCrudModal(entity, editIndex = null) {
   currentCrudEntity = entity;
   currentCrudEditIndex = editIndex;
@@ -1758,87 +2161,58 @@ function openBaakCrudModal(entity, editIndex = null) {
   if (!modal || !titleEl || !container) return;
 
   const isEdit = editIndex !== null;
-  const entityLabels = {
-    room: "Ruangan Perkuliahan",
-    subject: "Subjek Perkuliahan",
-    lecturer: "Dosen Pengampu",
-    student: "Mahasiswa"
-  };
+  titleEl.textContent = `${isEdit ? "Ubah Data" : "Tambah"} ${MASTER_ENTITIES[entity].label}`;
 
-  titleEl.textContent = `${isEdit ? 'Ubah Data' : 'Tambah'} ${entityLabels[entity]}`;
+  const item = isEdit ? MASTER_ENTITIES[entity].list()[editIndex] : {};
+  const text = (id, label, value, placeholder, required = true, type = "text", extra = "") => `
+      <div class="form-group">
+        <label class="form-label" for="${id}">${label}</label>
+        <input type="${type}" id="${id}" class="form-input" ${required ? "required" : ""} ${extra} value="${escapeHtml(value ?? "")}" placeholder="${placeholder}">
+      </div>`;
+  const select = (id, label, options, selected) => `
+      <div class="form-group">
+        <label class="form-label" for="${id}">${label}</label>
+        <select id="${id}" class="form-select" required>
+          ${options.map(option => `<option value="${option}" ${option === selected ? "selected" : ""}>${option}</option>`).join("")}
+        </select>
+      </div>`;
 
   let fieldsHtml = "";
   if (entity === "room") {
-    const item = isEdit ? BAAK_MASTER_ROOMS[editIndex] : { code: "", name: "", building: "Gedung D4" };
-    fieldsHtml = `
-      <div class="form-group">
-        <label class="form-label" for="crud-room-code">Label Ruangan</label>
-        <input type="text" id="crud-room-code" class="form-input" required value="${escapeHtml(item.code)}" placeholder="Contoh: C-102">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="crud-room-name">Nama Ruangan</label>
-        <input type="text" id="crud-room-name" class="form-input" required value="${escapeHtml(item.name)}" placeholder="Contoh: Ruang Workshop Komputer">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="crud-room-building">Gedung</label>
-        <select id="crud-room-building" class="form-select" required>
-          <option value="Gedung D4" ${item.building === 'Gedung D4' ? 'selected' : ''}>Gedung D4</option>
-          <option value="Gedung D3" ${item.building === 'Gedung D3' ? 'selected' : ''}>Gedung D3</option>
-          <option value="Gedung Pasca" ${item.building === 'Gedung Pasca' ? 'selected' : ''}>Gedung Pasca</option>
-          <option value="Gedung SAW" ${item.building === 'Gedung SAW' ? 'selected' : ''}>Gedung SAW</option>
-        </select>
-      </div>
-    `;
+    fieldsHtml = text("crud-room-code", "Label Ruangan", item.code, "Contoh: C-102")
+      + text("crud-room-name", "Nama Ruangan", item.name, "Contoh: Ruang Workshop Komputer")
+      + select("crud-room-building", "Gedung", Object.keys(BUILDING_CODES), item.building || "Gedung D4")
+      + `<div class="form-row-grid">`
+      + text("crud-room-capacity", "Kapasitas", item.capacity ?? 30, "Contoh: 40", true, "number", 'min="1" max="1000"')
+      + text("crud-room-floor", "Lantai", item.floor ?? 1, "Contoh: 2", true, "number", 'min="1" max="20"')
+      + `</div>`
+      + select("crud-room-type", "Tipe Ruangan", ["teori", "lab", "aula"], item.type || "teori");
   } else if (entity === "subject") {
-    const item = isEdit ? BAAK_MASTER_SUBJECTS[editIndex] : { code: "", name: "", sks: 3 };
-    fieldsHtml = `
-      <div class="form-group">
-        <label class="form-label" for="crud-subj-code">Kode Subjek</label>
-        <input type="text" id="crud-subj-code" class="form-input" required value="${escapeHtml(item.code)}" placeholder="Contoh: WMP301">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="crud-subj-name">Nama Subjek</label>
-        <input type="text" id="crud-subj-name" class="form-input" required value="${escapeHtml(item.name)}" placeholder="Contoh: Workshop Mesin Pembelajaran">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="crud-subj-sks">Satuan Kredit Semester (SKS)</label>
-        <input type="number" id="crud-subj-sks" class="form-input" min="1" max="6" required value="${item.sks}">
-      </div>
-    `;
+    fieldsHtml = text("crud-subj-code", "Kode Subjek", item.code, "Contoh: WMP301")
+      + text("crud-subj-name", "Nama Subjek", item.name, "Contoh: Workshop Mesin Pembelajaran")
+      + `<div class="form-row-grid">`
+      + text("crud-subj-sks", "Satuan Kredit Semester (SKS)", item.sks ?? 3, "", true, "number", 'min="1" max="6"')
+      + text("crud-subj-semester", "Semester", item.semester ?? "", "Contoh: 5", false, "number", 'min="1" max="14"')
+      + `</div>`
+      + text("crud-subj-department", "Departemen", item.department, "Contoh: Teknik Informatika", false);
   } else if (entity === "lecturer") {
-    const item = isEdit ? BAAK_MASTER_LECTURERS[editIndex] : { name: "", nip: "" };
-    fieldsHtml = `
-      <div class="form-group">
-        <label class="form-label" for="crud-lect-name">Nama Dosen Lengkap</label>
-        <input type="text" id="crud-lect-name" class="form-input" required value="${escapeHtml(item.name)}" placeholder="Contoh: Dr. Ir. Budi Sxxxx, M.T.">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="crud-lect-nip">Nomor Induk Pegawai (NIP)</label>
-        <input type="text" id="crud-lect-nip" class="form-input" required value="${escapeHtml(item.nip)}" placeholder="Contoh: 197403252001121xxx">
-      </div>
-    `;
+    fieldsHtml = text("crud-lect-name", "Nama Dosen Lengkap", item.name, "Contoh: Dr. Ir. Budi Sxxxx, M.T.")
+      + text("crud-lect-nip", "Nomor Induk Pegawai (NIP)", item.nip, "Contoh: 197403252001121xxx")
+      + `<div class="form-row-grid">`
+      + text("crud-lect-code", "Kode Dosen", item.code, "Contoh: BS", false)
+      + text("crud-lect-title", "Gelar Akademik", item.academic_title, "Contoh: Dr. Ir., M.T.", false)
+      + `</div>`
+      + text("crud-lect-department", "Departemen", item.department, "Contoh: Teknik Informatika", false)
+      + text("crud-lect-email", "Email", item.email, "Contoh: budi@pens.ac.id", true, "email");
   } else if (entity === "student") {
-    const item = isEdit ? BAAK_MASTER_STUDENTS[editIndex] : { name: "", nrp: "", cohort: "2023", major: "D4 Teknik Informatika" };
-    fieldsHtml = `
-      <div class="form-group">
-        <label class="form-label" for="crud-stud-name">Nama Mahasiswa</label>
-        <input type="text" id="crud-stud-name" class="form-input" required value="${escapeHtml(item.name)}" placeholder="Contoh: Realdho Fahryz">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="crud-stud-nrp">Nomor Registrasi Pokok (NRP)</label>
-        <input type="text" id="crud-stud-nrp" class="form-input" required value="${escapeHtml(item.nrp)}" placeholder="Contoh: 1234567890">
-      </div>
-      <div class="form-row-grid">
-        <div class="form-group">
-          <label class="form-label" for="crud-stud-cohort">Angkatan</label>
-          <input type="text" id="crud-stud-cohort" class="form-input" required value="${escapeHtml(item.cohort)}" placeholder="Contoh: 2022">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="crud-stud-major">Jurusan / Program Studi</label>
-          <input type="text" id="crud-stud-major" class="form-input" required value="${escapeHtml(item.major)}" placeholder="Contoh: D4 Teknik Informatika">
-        </div>
-      </div>
-    `;
+    fieldsHtml = text("crud-stud-name", "Nama Mahasiswa", item.name, "Contoh: Realdho Fahryz")
+      + text("crud-stud-nrp", "Nomor Registrasi Pokok (NRP)", item.nrp, "Contoh: 1234567890")
+      + `<div class="form-row-grid">`
+      + text("crud-stud-class", "Kelas", item.class ?? "", "Contoh: 3 D4 IT A")
+      + text("crud-stud-cohort", "Angkatan", item.cohort ?? "2023", "Contoh: 2023", true, "number", 'min="2000" max="2100"')
+      + `</div>`
+      + text("crud-stud-major", "Jurusan / Program Studi", item.major ?? "D4 Teknik Informatika", "Contoh: D4 Teknik Informatika")
+      + text("crud-stud-email", "Email", item.email, "Contoh: realdho@student.pens.ac.id", false, "email");
   }
 
   container.innerHTML = fieldsHtml;
@@ -1850,103 +2224,140 @@ function closeBaakCrudModal() {
   if (modal) modal.style.display = "none";
 }
 
+function readCrudForm(entity) {
+  const value = id => document.getElementById(id).value.trim();
+
+  if (entity === "room") {
+    const building = value("crud-room-building");
+    const local = {
+      code: value("crud-room-code"),
+      name: value("crud-room-name"),
+      building,
+      building_code: BUILDING_CODES[building],
+      capacity: parseInt(value("crud-room-capacity"), 10) || 30,
+      type: value("crud-room-type"),
+      floor: parseInt(value("crud-room-floor"), 10) || 1
+    };
+    const { building: label, ...payload } = local;
+    return { local, payload };
+  }
+
+  if (entity === "subject") {
+    const local = {
+      code: value("crud-subj-code"),
+      name: value("crud-subj-name"),
+      sks: parseInt(value("crud-subj-sks"), 10) || 2,
+      semester: value("crud-subj-semester"),
+      department: value("crud-subj-department")
+    };
+    return { local, payload: { ...local, semester: local.semester ? Number(local.semester) : null, department: local.department || null } };
+  }
+
+  if (entity === "lecturer") {
+    const local = {
+      name: value("crud-lect-name"),
+      nip: value("crud-lect-nip"),
+      code: value("crud-lect-code"),
+      academic_title: value("crud-lect-title"),
+      department: value("crud-lect-department"),
+      email: value("crud-lect-email")
+    };
+    return {
+      local,
+      payload: { ...local, code: local.code || null, academic_title: local.academic_title || null, department: local.department || null }
+    };
+  }
+
+  const local = {
+    name: value("crud-stud-name"),
+    nrp: value("crud-stud-nrp"),
+    class: value("crud-stud-class"),
+    cohort: value("crud-stud-cohort"),
+    major: value("crud-stud-major"),
+    email: value("crud-stud-email")
+  };
+  return {
+    local,
+    payload: {
+      name: local.name,
+      nrp: local.nrp,
+      class: local.class,
+      cohort_year: Number(local.cohort),
+      department: local.major,
+      email: local.email || null
+    }
+  };
+}
+
 function saveBaakCrudItem(e) {
   if (e) e.preventDefault();
 
-  const isEdit = currentCrudEditIndex !== null;
+  const entity = currentCrudEntity;
+  const config = MASTER_ENTITIES[entity];
+  const editIndex = currentCrudEditIndex;
+  const isEdit = editIndex !== null;
+  const list = config.list();
+  const existing = isEdit ? list[editIndex] : null;
+  const { local, payload } = readCrudForm(entity);
 
-  if (currentCrudEntity === "room") {
-    const code = document.getElementById("crud-room-code").value.trim();
-    const name = document.getElementById("crud-room-name").value.trim();
-    const building = document.getElementById("crud-room-building").value.trim();
-    if (!code || !name) return;
+  const applyLocally = savedId => {
+    const saved = { ...(existing || {}), ...local, ...(savedId ? { id: savedId } : {}) };
+    if (isEdit) list[editIndex] = saved;
+    else list.unshift(saved);
+    config.render();
+    syncMasterStats();
+    closeBaakCrudModal();
+    showToast(isEdit ? "Perubahan data master berhasil disimpan." : "Data master baru berhasil ditambahkan.");
+  };
 
-    const data = { code, name, building };
-    if (isEdit) {
-      BAAK_MASTER_ROOMS[currentCrudEditIndex] = data;
-    } else {
-      BAAK_MASTER_ROOMS.unshift(data);
-    }
-    APP_DATA.baak.stats.ruangan = BAAK_MASTER_ROOMS.length;
-    renderBaakRoomsTable();
-  } else if (currentCrudEntity === "subject") {
-    const code = document.getElementById("crud-subj-code").value.trim();
-    const name = document.getElementById("crud-subj-name").value.trim();
-    const sks = parseInt(document.getElementById("crud-subj-sks").value, 10) || 2;
-    if (!code || !name) return;
-
-    const data = { code, name, sks };
-    if (isEdit) {
-      BAAK_MASTER_SUBJECTS[currentCrudEditIndex] = data;
-    } else {
-      BAAK_MASTER_SUBJECTS.unshift(data);
-    }
-    APP_DATA.baak.stats.matakuliah = BAAK_MASTER_SUBJECTS.length;
-    renderBaakSubjectsTable();
-  } else if (currentCrudEntity === "lecturer") {
-    const name = document.getElementById("crud-lect-name").value.trim();
-    const nip = document.getElementById("crud-lect-nip").value.trim();
-    if (!name || !nip) return;
-
-    const data = { name, nip };
-    if (isEdit) {
-      BAAK_MASTER_LECTURERS[currentCrudEditIndex] = data;
-    } else {
-      BAAK_MASTER_LECTURERS.unshift(data);
-    }
-    APP_DATA.baak.stats.dosen = BAAK_MASTER_LECTURERS.length;
-    renderBaakLecturersTable();
-  } else if (currentCrudEntity === "student") {
-    const name = document.getElementById("crud-stud-name").value.trim();
-    const nrp = document.getElementById("crud-stud-nrp").value.trim();
-    const cohort = document.getElementById("crud-stud-cohort").value.trim();
-    const major = document.getElementById("crud-stud-major").value.trim();
-    if (!name || !nrp) return;
-
-    const data = { name, nrp, cohort, major };
-    if (isEdit) {
-      BAAK_MASTER_STUDENTS[currentCrudEditIndex] = data;
-    } else {
-      BAAK_MASTER_STUDENTS.unshift(data);
-    }
-    APP_DATA.baak.stats.mahasiswa = BAAK_MASTER_STUDENTS.length;
-    renderBaakStudentsTable();
+  if (isEdit && !existing.id) {
+    applyLocally();
+    return;
   }
 
-  closeBaakCrudModal();
-  showToast(isEdit ? "Perubahan data master berhasil disimpan." : "Data master baru berhasil ditambahkan.");
+  const request = isEdit
+    ? apiRequest("PUT", `/api/v1/${config.endpoint}/${existing.id}`, payload)
+    : apiRequest("POST", `/api/v1/${config.endpoint}`, payload);
 
-  if (activeCurrentView === "dashboard" && currentRole === "baak") {
-    renderDashboardForRole("baak");
-  }
+  request
+    .then(result => applyLocally((result?.data || result)?.id))
+    .catch(error => {
+      if (error.offline) {
+        applyLocally();
+        return;
+      }
+      showToast(apiErrorMessage(error));
+    });
 }
 
 function deleteBaakMasterItem(entity, index) {
   if (!confirm("Apakah Anda yakin ingin menghapus data ini?")) return;
 
-  if (entity === "room") {
-    BAAK_MASTER_ROOMS.splice(index, 1);
-    APP_DATA.baak.stats.ruangan = BAAK_MASTER_ROOMS.length;
-    renderBaakRoomsTable();
-  } else if (entity === "subject") {
-    BAAK_MASTER_SUBJECTS.splice(index, 1);
-    APP_DATA.baak.stats.matakuliah = BAAK_MASTER_SUBJECTS.length;
-    renderBaakSubjectsTable();
-  } else if (entity === "lecturer") {
-    BAAK_MASTER_LECTURERS.splice(index, 1);
-    APP_DATA.baak.stats.dosen = BAAK_MASTER_LECTURERS.length;
-    renderBaakLecturersTable();
-  } else if (entity === "student") {
-    BAAK_MASTER_STUDENTS.splice(index, 1);
-    APP_DATA.baak.stats.mahasiswa = BAAK_MASTER_STUDENTS.length;
-    renderBaakStudentsTable();
+  const config = MASTER_ENTITIES[entity];
+  const list = config.list();
+  const item = list[index];
+
+  const removeLocally = () => {
+    list.splice(index, 1);
+    config.render();
+    syncMasterStats();
+    showToast("Data master berhasil dihapus.");
+  };
+
+  if (!item.id) {
+    removeLocally();
+    return;
   }
 
-  showToast("Data master berhasil dihapus.");
-
-  if (activeCurrentView === "dashboard" && currentRole === "baak") {
-    renderDashboardForRole("baak");
-  }
+  apiRequest("DELETE", `/api/v1/${config.endpoint}/${item.id}`)
+    .then(removeLocally)
+    .catch(error => {
+      if (error.offline) {
+        removeLocally();
+        return;
+      }
+      showToast(apiErrorMessage(error));
+    });
 }
 
 function renderBaakRoomsTable() {
@@ -2101,12 +2512,86 @@ function renderBaakSystemLogs() {
   `).join("");
 }
 
-function openCsvImportModal() {
-  const modal = document.getElementById("csv-import-modal");
-  if (modal) {
-    modal.style.display = "flex";
-    resetCsvPreview();
+const CSV_ENTITIES = {
+  schedules: {
+    title: "Impor Master Jadwal Kuliah (CSV)",
+    columns: ["kode_mk", "nama_mk", "dosen_pengampu", "hari", "jam", "ruang"],
+    example: "WMP301, Workshop Mesin Pembelajaran, Dr. Ir. Budi Sxxxx, M.T., Senin, 08:00 - 11:00, Lab C 102",
+    file: "jadwal_kuliah.csv"
+  },
+  rooms: {
+    title: "Impor Data Ruangan (CSV)",
+    columns: ["code", "name", "building_code", "capacity", "type", "floor"],
+    example: "SAW-05.02, Ruang Teori SAW, SAW, 40, teori, 5",
+    file: "ruangan.csv"
+  },
+  subjects: {
+    title: "Impor Data Subjek (CSV)",
+    columns: ["code", "name", "sks", "semester", "department"],
+    example: "WM, Workshop Mesin Pembelajaran, 3, 5, Teknik Informatika",
+    file: "subjek.csv"
+  },
+  lecturers: {
+    title: "Impor Data Dosen (CSV)",
+    columns: ["nip", "name", "code", "academic_title", "department", "email"],
+    example: "198001012005011001, Dr. Ir. Budi S, M.T., BS, Dr. Ir. ..., M.T., Teknik Informatika, budi@pens.ac.id",
+    file: "dosen.csv"
+  },
+  students: {
+    title: "Impor Data Mahasiswa (CSV)",
+    columns: ["nrp", "name", "class", "cohort_year", "department", "email"],
+    example: "3123500001, Ahmad Realdho, 3 D4 IT A, 2023, Teknik Informatika, realdho@student.pens.ac.id",
+    file: "mahasiswa.csv"
   }
+};
+
+const CSV_SAMPLE_ROWS = {
+  rooms: [
+    { code: "SAW-05.03", name: "Ruang Teori SAW 05.03", building_code: "SAW", capacity: "40", type: "teori", floor: "5" },
+    { code: "D3-301", name: "Laboratorium Jaringan D3", building_code: "D3", capacity: "32", type: "lab", floor: "3" },
+    { code: "", name: "Ruang Tanpa Kode", building_code: "D4", capacity: "30", type: "teori", floor: "1" }
+  ],
+  subjects: [
+    { code: "WMP301", name: "Workshop Mesin Pembelajaran", sks: "3", semester: "5", department: "Teknik Informatika" },
+    { code: "IOT402", name: "Internet of Things Terapan", sks: "3", semester: "7", department: "Teknik Informatika" },
+    { code: "XYZ999", name: "", sks: "2", semester: "3", department: "Teknik Informatika" }
+  ],
+  lecturers: [
+    { nip: "198001012005011001", name: "Dr. Ir. Budi S, M.T.", code: "BS", academic_title: "Dr. Ir., M.T.", department: "Teknik Informatika", email: "budi@pens.ac.id" },
+    { nip: "198505052010122002", name: "Sri Wahyuni, S.Kom., M.T.", code: "SW", academic_title: "M.T.", department: "Teknik Informatika", email: "sri@pens.ac.id" },
+    { nip: "", name: "Dosen Tanpa NIP", code: "DT", academic_title: "", department: "Teknik Informatika", email: "dt@pens.ac.id" }
+  ],
+  students: [
+    { nrp: "3123500001", name: "Ahmad Realdho", class: "3 D4 IT A", cohort_year: "2023", department: "Teknik Informatika", email: "realdho@student.pens.ac.id" },
+    { nrp: "3123500002", name: "Dewi Anggraini", class: "3 D4 IT A", cohort_year: "2023", department: "Teknik Informatika", email: "dewi@student.pens.ac.id" },
+    { nrp: "", name: "Mahasiswa Tanpa NRP", class: "3 D4 IT B", cohort_year: "2023", department: "Teknik Informatika", email: "" }
+  ]
+};
+
+const CSV_REQUIRED_FIELDS = {
+  rooms: ["code", "name", "building_code", "capacity"],
+  subjects: ["code", "name", "sks"],
+  lecturers: ["nip", "name"],
+  students: ["nrp", "name", "class", "cohort_year", "department"]
+};
+
+let currentCsvEntity = "schedules";
+
+function openCsvImportModal(entity = "schedules") {
+  const modal = document.getElementById("csv-import-modal");
+  if (!modal) return;
+
+  currentCsvEntity = CSV_ENTITIES[entity] ? entity : "schedules";
+  const config = CSV_ENTITIES[currentCsvEntity];
+
+  document.getElementById("csv-modal-title").textContent = config.title;
+  document.getElementById("csv-modal-description").innerHTML =
+    `Unggah berkas CSV dengan kolom: <code>${escapeHtml(config.columns.join(", "))}</code>.`;
+  document.getElementById("csv-modal-example").textContent = config.example;
+  document.getElementById("csv-file-input").value = "";
+
+  modal.style.display = "flex";
+  resetCsvPreview();
 }
 
 function closeCsvImportModal() {
@@ -2119,79 +2604,236 @@ function resetCsvPreview() {
   const parseTable = document.getElementById("csv-parsed-table-wrapper");
   if (box) box.style.display = "none";
   if (parseTable) parseTable.style.display = "none";
+  pendingCsvRows = [];
+  setCsvStatus(null);
 }
 
-function simulateFileUpload() {
-  const box = document.getElementById("csv-preview-box");
-  const parseTable = document.getElementById("csv-parsed-table-wrapper");
-  const tbody = document.getElementById("csv-parsed-tbody");
+function setCsvStatus(state, text) {
+  const box = document.getElementById("csv-import-status");
+  const label = document.getElementById("csv-import-status-text");
+  const confirmButton = document.getElementById("btn-csv-confirm");
+  if (!box || !label) return;
 
-  pendingCsvRows = [
-    {
-      id: 1,
-      code: "WMP301",
-      title: "Workshop Mesin Pembelajaran",
-      lecturer: "Dr. Ir. Budi Sxxxx, M.T.",
-      day: "Senin",
-      time: "08:00 - 11:00",
-      room: "Lab C 102",
-      errorType: null
-    },
-    {
-      id: 2,
-      code: "IOT402",
-      title: "Internet of Things Terapan",
-      lecturer: "Dosen Tidak Ditemukan",
-      day: "Rabu",
-      time: "13:00 - 16:00",
-      room: "Lab C 103",
-      errorType: "lecturer"
-    },
-    {
-      id: 3,
-      code: "XYZ999",
-      title: "Kelas Tidak Terdaftar",
-      lecturer: "Nur Rosyid Mxxxx, S.Kom., M.T.",
-      day: "Kamis",
-      time: "09:00 - 11:00",
-      room: "SAW-06.10",
-      errorType: "class"
+  if (!state) {
+    box.style.display = "none";
+    if (confirmButton) confirmButton.disabled = false;
+    return;
+  }
+
+  box.style.display = "flex";
+  box.classList.toggle("done", state === "done");
+  box.classList.toggle("failed", state === "failed");
+  label.textContent = text;
+  if (confirmButton) confirmButton.disabled = state === "busy";
+}
+
+function downloadCsvTemplate() {
+  const config = CSV_ENTITIES[currentCsvEntity];
+  const content = `${config.columns.join(",")}\n`;
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([content], { type: "text/csv" }));
+  link.download = config.file;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function parseCsvText(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  const source = text.replace(/^\uFEFF/, "");
+
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (quoted) {
+      if (char === '"' && source[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        cell += char;
+      }
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(cell.trim());
+      cell = "";
+    } else if (char === "\n" || char === "\r") {
+      if (char === "\r" && source[i + 1] === "\n") i++;
+      row.push(cell.trim());
+      if (row.some(value => value !== "")) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
     }
-  ];
+  }
+  row.push(cell.trim());
+  if (row.some(value => value !== "")) rows.push(row);
+  return rows;
+}
 
-  if (tbody) {
+function csvTextToRecords(text, columns) {
+  const table = parseCsvText(text);
+  if (table.length === 0) return { error: "Berkas CSV kosong.", records: [] };
+
+  const header = table[0].map(name => name.toLowerCase());
+  const missing = columns.filter(name => !header.includes(name));
+  if (missing.length > 0) {
+    return { error: `Kolom wajib tidak ditemukan: ${missing.join(", ")}.`, records: [] };
+  }
+
+  const records = table.slice(1).map((cells, index) => {
+    const record = { id: index + 1, errorType: null };
+    columns.forEach(name => {
+      record[name] = cells[header.indexOf(name)] ?? "";
+    });
+    return record;
+  });
+  return { error: null, records };
+}
+
+function validateMasterCsvRow(entity, row) {
+  const missing = (CSV_REQUIRED_FIELDS[entity] || []).filter(field => !String(row[field] ?? "").trim());
+  row.errorType = missing.length > 0 ? "field" : null;
+  row.missingFields = missing;
+}
+
+function renderCsvPreview(fileLabel) {
+  const config = CSV_ENTITIES[currentCsvEntity];
+  const head = document.getElementById("csv-parsed-thead-row");
+  const tbody = document.getElementById("csv-parsed-tbody");
+  const box = document.getElementById("csv-preview-box");
+  const wrapper = document.getElementById("csv-parsed-table-wrapper");
+
+  document.getElementById("csv-preview-file").textContent = fileLabel;
+  document.getElementById("csv-preview-count").textContent = `(${pendingCsvRows.length} baris)`;
+
+  if (currentCsvEntity === "schedules") {
+    head.innerHTML = ["Kode", "Nama Matakuliah", "Dosen Pengampu", "Jadwal", "Ruangan", "Status"].map(h => `<th>${h}</th>`).join("");
+    renderScheduleCsvRows(tbody);
+  } else {
+    head.innerHTML = config.columns.map(name => `<th>${escapeHtml(name)}</th>`).join("") + "<th>Status</th>";
     tbody.innerHTML = pendingCsvRows.map(row => `
-      <tr class="${row.errorType ? 'csv-error-row' : ''}">
-        <td>
-          ${row.errorType === 'class' ? `
-            <input type="text" class="csv-cell-input" value="${escapeHtml(row.code)}" onchange="updateCsvCell(${row.id}, 'code', this.value)" title="Kode tidak terdaftar, silakan perbaiki">
-          ` : `<code>${escapeHtml(row.code)}</code>`}
-        </td>
-        <td>
-          ${row.errorType === 'class' ? `
-            <input type="text" class="csv-cell-input" value="${escapeHtml(row.title)}" onchange="updateCsvCell(${row.id}, 'title', this.value)" title="Kelas tidak ditemukan di kurikulum">
-          ` : escapeHtml(row.title)}
-        </td>
-        <td>
-          ${row.errorType === 'lecturer' ? `
-            <select class="csv-cell-select" onchange="updateCsvCell(${row.id}, 'lecturer', this.value)" title="Dosen tidak ditemukan, silakan pilih dosen valid">
-              <option value="">-- Pilih Dosen Pengampu --</option>
-              ${BAAK_MASTER_LECTURERS.map(l => `<option value="${escapeHtml(l.name)}">${escapeHtml(l.name)}</option>`).join('')}
-            </select>
-          ` : escapeHtml(row.lecturer)}
-        </td>
-        <td>${escapeHtml(row.day)}, ${escapeHtml(row.time)}</td>
-        <td>${escapeHtml(row.room)}</td>
-        <td>
-          ${row.errorType ? `<span class="badge-rec-status" style="background: var(--accent-rose-light); color: var(--accent-rose); border-color: var(--accent-rose);">Perlu Koreksi</span>` : `<span class="status-badge approved">Valid</span>`}
-        </td>
+      <tr class="${row.errorType ? "csv-error-row" : ""}">
+        ${config.columns.map(name => `
+          <td><input type="text" class="csv-cell-input" value="${escapeHtml(row[name])}" onchange="updateMasterCsvCell(${row.id}, '${name}', this.value)" aria-label="${escapeHtml(name)}"></td>
+        `).join("")}
+        <td>${row.errorType
+          ? `<span class="badge-rec-status" style="background: var(--accent-rose-light); color: var(--accent-rose); border-color: var(--accent-rose);">Lengkapi ${escapeHtml(row.missingFields.join(", "))}</span>`
+          : `<span class="status-badge approved">Valid</span>`}</td>
       </tr>
     `).join("");
   }
 
-  if (box) box.style.display = "block";
-  if (parseTable) parseTable.style.display = "block";
-  showToast("Berkas CSV berhasil diuraikan. Periksa baris bertanda merah sebelum konfirmasi.");
+  box.style.display = "block";
+  wrapper.style.display = "block";
+}
+
+function updateMasterCsvCell(rowId, field, value) {
+  const row = pendingCsvRows.find(r => r.id === rowId);
+  if (!row) return;
+  row[field] = value.trim();
+  validateMasterCsvRow(currentCsvEntity, row);
+  renderCsvPreview(document.getElementById("csv-preview-file").textContent);
+}
+
+function handleCsvFileSelected(file) {
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("Ukuran berkas melebihi 5 MB.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const config = CSV_ENTITIES[currentCsvEntity];
+    const { error, records } = csvTextToRecords(String(reader.result), config.columns);
+    if (error) {
+      resetCsvPreview();
+      showToast(error);
+      return;
+    }
+
+    if (currentCsvEntity === "schedules") {
+      pendingCsvRows = records.map(row => ({
+        id: row.id,
+        code: row.kode_mk,
+        title: row.nama_mk,
+        lecturer: row.dosen_pengampu,
+        day: row.hari,
+        time: row.jam,
+        room: row.ruang,
+        errorType: BAAK_MASTER_LECTURERS.some(l => l.name === row.dosen_pengampu) ? null : "lecturer"
+      }));
+    } else {
+      pendingCsvRows = records;
+      pendingCsvRows.forEach(row => validateMasterCsvRow(currentCsvEntity, row));
+    }
+    renderCsvPreview(file.name);
+    showToast("Berkas CSV berhasil diuraikan. Periksa baris bertanda merah sebelum konfirmasi.");
+  };
+  reader.readAsText(file);
+}
+
+function setupCsvDropArea() {
+  const input = document.getElementById("csv-file-input");
+  const area = document.getElementById("csv-drop-area");
+  if (!input || !area) return;
+
+  input.addEventListener("change", () => handleCsvFileSelected(input.files[0]));
+  area.addEventListener("dragover", event => event.preventDefault());
+  area.addEventListener("drop", event => {
+    event.preventDefault();
+    handleCsvFileSelected(event.dataTransfer.files[0]);
+  });
+}
+
+function simulateFileUpload() {
+  if (currentCsvEntity === "schedules") {
+    pendingCsvRows = [
+      { id: 1, code: "WMP301", title: "Workshop Mesin Pembelajaran", lecturer: "Dr. Ir. Budi Sxxxx, M.T.", day: "Senin", time: "08:00 - 11:00", room: "Lab C 102", errorType: null },
+      { id: 2, code: "IOT402", title: "Internet of Things Terapan", lecturer: "Dosen Tidak Ditemukan", day: "Rabu", time: "13:00 - 16:00", room: "Lab C 103", errorType: "lecturer" },
+      { id: 3, code: "XYZ999", title: "Kelas Tidak Terdaftar", lecturer: "Nur Rosyid Mxxxx, S.Kom., M.T.", day: "Kamis", time: "09:00 - 11:00", room: "SAW-06.10", errorType: "class" }
+    ];
+  } else {
+    pendingCsvRows = CSV_SAMPLE_ROWS[currentCsvEntity].map((row, index) => ({ id: index + 1, errorType: null, ...row }));
+    pendingCsvRows.forEach(row => validateMasterCsvRow(currentCsvEntity, row));
+  }
+  renderCsvPreview(CSV_ENTITIES[currentCsvEntity].file);
+  showToast("Contoh data dimuat. Periksa baris bertanda merah sebelum konfirmasi.");
+}
+
+function renderScheduleCsvRows(tbody) {
+  tbody.innerHTML = pendingCsvRows.map(row => `
+    <tr class="${row.errorType ? 'csv-error-row' : ''}">
+      <td>
+        ${row.errorType === 'class' ? `
+          <input type="text" class="csv-cell-input" value="${escapeHtml(row.code)}" onchange="updateCsvCell(${row.id}, 'code', this.value)" title="Kode tidak terdaftar, silakan perbaiki">
+        ` : `<code>${escapeHtml(row.code)}</code>`}
+      </td>
+      <td>
+        ${row.errorType === 'class' ? `
+          <input type="text" class="csv-cell-input" value="${escapeHtml(row.title)}" onchange="updateCsvCell(${row.id}, 'title', this.value)" title="Kelas tidak ditemukan di kurikulum">
+        ` : escapeHtml(row.title)}
+      </td>
+      <td>
+        ${row.errorType === 'lecturer' ? `
+          <select class="csv-cell-select" onchange="updateCsvCell(${row.id}, 'lecturer', this.value)" title="Dosen tidak ditemukan, silakan pilih dosen valid">
+            <option value="">-- Pilih Dosen Pengampu --</option>
+            ${BAAK_MASTER_LECTURERS.map(l => `<option value="${escapeHtml(l.name)}">${escapeHtml(l.name)}</option>`).join('')}
+          </select>
+        ` : escapeHtml(row.lecturer)}
+      </td>
+      <td>${escapeHtml(row.day)}, ${escapeHtml(row.time)}</td>
+      <td>${escapeHtml(row.room)}</td>
+      <td>
+        ${row.errorType ? `<span class="badge-rec-status" style="background: var(--accent-rose-light); color: var(--accent-rose); border-color: var(--accent-rose);">Perlu Koreksi</span>` : `<span class="status-badge approved">Valid</span>`}
+      </td>
+    </tr>
+  `).join("");
 }
 
 function updateCsvCell(rowId, field, value) {
@@ -2208,15 +2850,81 @@ function updateCsvCell(rowId, field, value) {
   }
 }
 
+function applyImportedRowsLocally(entity, rows) {
+  const upsert = (list, keyOf, item) => {
+    const index = list.findIndex(existing => keyOf(existing) === keyOf(item));
+    if (index >= 0) list[index] = item;
+    else list.unshift(item);
+  };
+  const buildings = { D4: "Gedung D4", D3: "Gedung D3", PASCA: "Gedung Pasca", SAW: "Gedung SAW" };
+
+  rows.forEach(row => {
+    if (entity === "rooms") {
+      const building = buildings[String(row.building_code).toUpperCase()] || row.building_code;
+      upsert(BAAK_MASTER_ROOMS, r => r.code, { code: row.code, name: row.name, building });
+    } else if (entity === "subjects") {
+      upsert(BAAK_MASTER_SUBJECTS, r => r.code, { code: row.code, name: row.name, sks: parseInt(row.sks, 10) || 2 });
+    } else if (entity === "lecturers") {
+      upsert(BAAK_MASTER_LECTURERS, r => r.nip, { name: row.name, nip: row.nip });
+    } else if (entity === "students") {
+      upsert(BAAK_MASTER_STUDENTS, r => r.nrp, { name: row.name, nrp: row.nrp, cohort: row.cohort_year, major: row.department });
+    }
+  });
+
+  APP_DATA.baak.stats.ruangan = BAAK_MASTER_ROOMS.length;
+  APP_DATA.baak.stats.matakuliah = BAAK_MASTER_SUBJECTS.length;
+  APP_DATA.baak.stats.dosen = BAAK_MASTER_LECTURERS.length;
+  APP_DATA.baak.stats.mahasiswa = BAAK_MASTER_STUDENTS.length;
+  renderBaakRoomsTable();
+  renderBaakSubjectsTable();
+  renderBaakLecturersTable();
+  renderBaakStudentsTable();
+}
+
 function confirmCsvImport() {
+  if (pendingCsvRows.length === 0) {
+    showToast("Pilih berkas CSV atau muat contoh data terlebih dahulu.");
+    return;
+  }
+
   const hasUnresolved = pendingCsvRows.some(r => r.errorType !== null);
   if (hasUnresolved) {
     showToast("Harap perbaiki kolom bertanda merah terlebih dahulu.");
     return;
   }
 
-  closeCsvImportModal();
-  showToast("Data jadwal CSV berhasil disinkronkan ke master jadwal perkuliahan.");
+  const entity = currentCsvEntity;
+  const config = CSV_ENTITIES[entity];
+  const rows = pendingCsvRows.map(row => {
+    if (entity === "schedules") {
+      return { kode_mk: row.code, nama_mk: row.title, dosen_pengampu: row.lecturer, hari: row.day, jam: row.time, ruang: row.room };
+    }
+    return Object.fromEntries(config.columns.map(name => [name, row[name]]));
+  });
+
+  setCsvStatus("busy", `Mengirim ${rows.length} baris ke server...`);
+
+  apiRequest("POST", `/api/v1/import/${entity}`, { rows })
+    .then(result => {
+      const summary = `${result.imported} dari ${result.total} baris tersimpan${result.failed > 0 ? `, ${result.failed} gagal` : ""}.`;
+      setCsvStatus(result.failed > 0 ? "failed" : "done", summary);
+      if (result.failed === 0) {
+        applyImportedRowsLocally(entity, rows);
+        window.setTimeout(closeCsvImportModal, 900);
+      }
+      showToast(`Impor selesai: ${summary}`);
+    })
+    .catch(error => {
+      if (error.offline) {
+        applyImportedRowsLocally(entity, rows);
+        setCsvStatus("done", "Server tidak terjangkau; data diterapkan pada tampilan lokal saja.");
+        window.setTimeout(closeCsvImportModal, 1200);
+        showToast("Server tidak terjangkau; impor diterapkan pada tampilan lokal.");
+        return;
+      }
+      setCsvStatus("failed", error.message);
+      showToast(error.message);
+    });
 }
 
 function setupProfilePopover() {
