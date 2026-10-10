@@ -12,6 +12,50 @@ class BuildingRoomSeeder extends Seeder
     {
         $buildings = [
             [
+                'code' => 'D4',
+                'name' => 'Gedung D4',
+                'floors_count' => 4,
+                'rooms' => [
+                    ['code' => 'C-102', 'name' => 'Ruang Workshop Komputer C-102', 'capacity' => 40, 'type' => 'lab', 'floor' => 1],
+                    ['code' => 'C-103', 'name' => 'Laboratorium Jaringan & IoT', 'capacity' => 35, 'type' => 'lab', 'floor' => 1],
+                    ['code' => 'C-104', 'name' => 'Laboratorium Data Science & AI', 'capacity' => 35, 'type' => 'lab', 'floor' => 1],
+                    ['code' => 'C-105', 'name' => 'Laboratorium Rekayasa Perangkat Lunak', 'capacity' => 35, 'type' => 'lab', 'floor' => 1],
+                    ['code' => 'D4-201', 'name' => 'Ruang Teori Multimedia D4-201', 'capacity' => 40, 'type' => 'teori', 'floor' => 2],
+                    ['code' => 'D4-202', 'name' => 'Ruang Kuliah Komputasi D4-202', 'capacity' => 40, 'type' => 'teori', 'floor' => 2],
+                    ['code' => 'D4-301', 'name' => 'Laboratorium Cyber Security', 'capacity' => 30, 'type' => 'lab', 'floor' => 3],
+                ],
+            ],
+            [
+                'code' => 'SAW',
+                'name' => 'Gedung SAW',
+                'floors_count' => 10,
+                'rooms' => [
+                    ['code' => 'SAW-05.02', 'name' => 'Ruang Diskusi & Seminar SAW-05.02', 'capacity' => 45, 'type' => 'teori', 'floor' => 5],
+                    ['code' => 'SAW-06.10', 'name' => 'Ruang Kuliah Teori Pascasarjana SAW-06.10', 'capacity' => 40, 'type' => 'teori', 'floor' => 6],
+                    ['code' => 'SAW-08', 'name' => 'Laboratorium Software Terpadu SAW-08', 'capacity' => 50, 'type' => 'lab', 'floor' => 8],
+                    ['code' => 'SAW-09.01', 'name' => 'Ruang Riset Komputasi Lanjut', 'capacity' => 30, 'type' => 'lab', 'floor' => 9],
+                ],
+            ],
+            [
+                'code' => 'D3',
+                'name' => 'Gedung D3',
+                'floors_count' => 3,
+                'rooms' => [
+                    ['code' => 'B-101', 'name' => 'Ruang Laboratorium Bahasa B-101', 'capacity' => 35, 'type' => 'lab', 'floor' => 1],
+                    ['code' => 'B-204', 'name' => 'Laboratorium Pemrosesan Sinyal B-204', 'capacity' => 35, 'type' => 'lab', 'floor' => 2],
+                    ['code' => 'B-301', 'name' => 'Ruang Kuliah Telekomunikasi B-301', 'capacity' => 40, 'type' => 'teori', 'floor' => 3],
+                ],
+            ],
+            [
+                'code' => 'PASCA',
+                'name' => 'Gedung Pasca',
+                'floors_count' => 4,
+                'rooms' => [
+                    ['code' => 'Lab Riset Lt 3', 'name' => 'Laboratorium Riset Terapan', 'capacity' => 30, 'type' => 'lab', 'floor' => 3],
+                    ['code' => 'PS-201', 'name' => 'Ruang Seminar Pascasarjana', 'capacity' => 60, 'type' => 'seminar', 'floor' => 2],
+                ],
+            ],
+            [
                 'code' => 'GA',
                 'name' => 'Gedung A - Gedung Utama',
                 'floors_count' => 4,

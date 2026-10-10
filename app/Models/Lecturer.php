@@ -31,4 +31,9 @@ class Lecturer extends Model
     {
         return $this->hasMany(Schedule::class, 'lecturerId');
     }
+
+    public function getNameAttribute(): string
+    {
+        return $this->username ?? '';
+    }
 }

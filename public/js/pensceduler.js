@@ -20,8 +20,8 @@ const I18N_DICTIONARY = {
     roleDescMahasiswa: "3 D4 IT A",
     roleDescDosen: "Departemen Teknik Informatika",
     roleDescBaak: "Pusat Pelayanan & Penjadwalan",
-    roleOptDescMahasiswa: "Realdho Fahryz (1234567890)",
-    roleOptDescDosen: "Dr. Ir. Budi Sxxxx, M.T.",
+    roleOptDescMahasiswa: "Mahasiswa Alpha (3122000001)",
+    roleOptDescDosen: "Dosen Alpha, S.Kom., M.T.",
     roleOptDescBaak: "Biro Administrasi Akademik PENS",
     switchRole: "Ganti Peran",
     signOut: "Keluar",
@@ -54,8 +54,8 @@ const I18N_DICTIONARY = {
     roleDescMahasiswa: "3rd Year Informatics Engineering A",
     roleDescDosen: "Informatics Engineering Department",
     roleDescBaak: "Academic Administration Service Center",
-    roleOptDescMahasiswa: "Realdho Fahryz (1234567890)",
-    roleOptDescDosen: "Dr. Ir. Budi Sxxxx, M.T.",
+    roleOptDescMahasiswa: "Mahasiswa Alpha (3122000001)",
+    roleOptDescDosen: "Dosen Alpha, S.Kom., M.T.",
     roleOptDescBaak: "PENS Academic Administration Bureau",
     switchRole: "Switch Role",
     signOut: "Sign Out",
@@ -1136,7 +1136,16 @@ async function loadRescheduleRequests() {
 }
 
 function findPendingRequestUuid(requestId) {
-  return ALL_RESCHEDULE_REQUESTS.find(item => item.id === requestId)?.uuid || null;
+  if (!requestId) return null;
+  const match = ALL_RESCHEDULE_REQUESTS.find(item =>
+    item.id === requestId ||
+    item.uuid === requestId ||
+    item.requestCode === requestId
+  );
+  if (match?.uuid) return match.uuid;
+  if (match?.id && typeof match.id === "string" && match.id.length > 30) return match.id;
+  if (typeof requestId === "string" && requestId.length > 30) return requestId;
+  return null;
 }
 
 function reviewRequestRemotely(action, requestId, reviewNotes) {
@@ -1651,7 +1660,7 @@ function submitRescheduleRequest() {
       id: `REQ-${Date.now().toString().slice(-4)}`,
       courseId: scheduleId,
       courseTitle: courseTitle,
-      lecturerName: isDosen ? APP_DATA.dosen.name : isMahasiswa ? "Dr. Ir. Budi Sxxxx, M.T." : "BAAK",
+      lecturerName: isDosen ? APP_DATA.dosen.name : isMahasiswa ? (APP_DATA.dosen?.name || "Dosen Pengampu") : "BAAK",
       requesterRole: APP_DATA[currentRole].roleLabel,
       requesterName: APP_DATA[currentRole].name,
       originalSchedule: "Jadwal Reguler",
@@ -1675,7 +1684,8 @@ function submitRescheduleRequest() {
     showToast(isMahasiswa ? "Permohonan berhasil diajukan. Menunggu persetujuan dosen." : "Jadwal perkuliahan berhasil diperbarui (Otomatis Disetujui).");
   };
 
-  if (!persisted) {
+  const isUuid = typeof scheduleId === "string" && scheduleId.length > 30;
+  if (!persisted && !isUuid) {
     applyLocally();
     return;
   }
@@ -1687,6 +1697,9 @@ function submitRescheduleRequest() {
     return;
   }
 
+  const selectedRoom = DATABASE_ROOMS.find(r => r.name === targetRoom.value || r.code === targetRoom.value || r.id === targetRoom.value);
+  const targetRoomId = selectedRoom?.id || null;
+
   if (submitButton) submitButton.disabled = true;
   showToast("Mengirim pengajuan dan memeriksa bentrok jadwal...");
 
@@ -1696,6 +1709,7 @@ function submitRescheduleRequest() {
     targetDay: targetDay.value,
     targetStartTime: startTime,
     targetEndTime: endTime,
+    targetRoomId,
     targetRoomName: targetRoom.value,
     durationType: DURATION_CODES[durationSelect.value] || "1_minggu",
     reason: `Perpindahan sesi perkuliahan (${durationSelect.value})`
@@ -1785,9 +1799,9 @@ function resetChatInterface() {
   `).join("");
 
   const welcomeText = isMahasiswa
-    ? `Halo Realdho Fahryz. Saya Asisten AI Akademik PENSCEDULER. Anda dapat menanyakan jadwal hari ini, daftar matakuliah, atau mencari rekomendasi slot kosong untuk pindah jadwal.`
+    ? `Halo ${APP_DATA[currentRole]?.name || "Mahasiswa"}. Saya Asisten AI Akademik PENSCEDULER. Anda dapat menanyakan jadwal hari ini, daftar matakuliah, atau mencari rekomendasi slot kosong untuk pindah jadwal.`
     : isDosen
-    ? `Selamat datang Dr. Ir. Budi Sxxxx, M.T. Saya siap membantu memeriksa jadwal mengajar, daftar kelas, serta mencarikan slot kosong bebas konflik untuk memindahkan jadwal perkuliahan.`
+    ? `Selamat datang ${APP_DATA[currentRole]?.name || "Dosen"}. Saya siap membantu memeriksa jadwal mengajar, daftar kelas, serta mencarikan slot kosong bebas konflik untuk memindahkan jadwal perkuliahan.`
     : `Halo Tim BAAK. Saya siap membantu memantau ketersediaan ruangan kampus, rekapitulasi jadwal, dan rekomendasi slot perpindahan perkuliahan.`;
 
   stream.innerHTML = `
@@ -2196,23 +2210,23 @@ function openBaakCrudModal(entity, editIndex = null) {
       + `</div>`
       + text("crud-subj-department", "Departemen", item.department, "Contoh: Teknik Informatika", false);
   } else if (entity === "lecturer") {
-    fieldsHtml = text("crud-lect-name", "Nama Dosen Lengkap", item.name, "Contoh: Dr. Ir. Budi Sxxxx, M.T.")
-      + text("crud-lect-nip", "Nomor Induk Pegawai (NIP)", item.nip, "Contoh: 197403252001121xxx")
+    fieldsHtml = text("crud-lect-name", "Nama Dosen Lengkap", item.name, "Contoh: Dosen Alpha, S.Kom., M.T.")
+      + text("crud-lect-nip", "Nomor Induk Pegawai (NIP)", item.nip, "Contoh: 198001012005011001")
       + `<div class="form-row-grid">`
-      + text("crud-lect-code", "Kode Dosen", item.code, "Contoh: BS", false)
-      + text("crud-lect-title", "Gelar Akademik", item.academic_title, "Contoh: Dr. Ir., M.T.", false)
+      + text("crud-lect-code", "Kode Dosen", item.code, "Contoh: D-ALP", false)
+      + text("crud-lect-title", "Gelar Akademik", item.academic_title, "Contoh: S.Kom., M.T.", false)
       + `</div>`
       + text("crud-lect-department", "Departemen", item.department, "Contoh: Teknik Informatika", false)
-      + text("crud-lect-email", "Email", item.email, "Contoh: budi@pens.ac.id", true, "email");
+      + text("crud-lect-email", "Email", item.email, "Contoh: dosen.alpha@pens.ac.id", true, "email");
   } else if (entity === "student") {
-    fieldsHtml = text("crud-stud-name", "Nama Mahasiswa", item.name, "Contoh: Realdho Fahryz")
-      + text("crud-stud-nrp", "Nomor Registrasi Pokok (NRP)", item.nrp, "Contoh: 1234567890")
+    fieldsHtml = text("crud-stud-name", "Nama Mahasiswa", item.name, "Contoh: Mahasiswa Alpha")
+      + text("crud-stud-nrp", "Nomor Registrasi Pokok (NRP)", item.nrp, "Contoh: 3122000001")
       + `<div class="form-row-grid">`
       + text("crud-stud-class", "Kelas", item.class ?? "", "Contoh: 3 D4 IT A")
       + text("crud-stud-cohort", "Angkatan", item.cohort ?? "2023", "Contoh: 2023", true, "number", 'min="2000" max="2100"')
       + `</div>`
       + text("crud-stud-major", "Jurusan / Program Studi", item.major ?? "D4 Teknik Informatika", "Contoh: D4 Teknik Informatika")
-      + text("crud-stud-email", "Email", item.email, "Contoh: realdho@student.pens.ac.id", false, "email");
+      + text("crud-stud-email", "Email", item.email, "Contoh: mhs.alpha@student.pens.ac.id", false, "email");
   }
 
   container.innerHTML = fieldsHtml;
@@ -2306,6 +2320,9 @@ function saveBaakCrudItem(e) {
     else list.unshift(saved);
     config.render();
     syncMasterStats();
+    if (entity === "room" || entity === "subject") {
+      loadSchedulingCatalog();
+    }
     closeBaakCrudModal();
     showToast(isEdit ? "Perubahan data master berhasil disimpan." : "Data master baru berhasil ditambahkan.");
   };
@@ -2341,6 +2358,9 @@ function deleteBaakMasterItem(entity, index) {
     list.splice(index, 1);
     config.render();
     syncMasterStats();
+    if (entity === "room" || entity === "subject") {
+      loadSchedulingCatalog();
+    }
     showToast("Data master berhasil dihapus.");
   };
 
@@ -2516,7 +2536,7 @@ const CSV_ENTITIES = {
   schedules: {
     title: "Impor Master Jadwal Kuliah (CSV)",
     columns: ["kode_mk", "nama_mk", "dosen_pengampu", "hari", "jam", "ruang"],
-    example: "WMP301, Workshop Mesin Pembelajaran, Dr. Ir. Budi Sxxxx, M.T., Senin, 08:00 - 11:00, Lab C 102",
+    example: "WMP301, Workshop Mesin Pembelajaran, Dosen Alpha, S.Kom., M.T., Senin, 08:00 - 11:00, Lab C 102",
     file: "jadwal_kuliah.csv"
   },
   rooms: {
@@ -2534,13 +2554,13 @@ const CSV_ENTITIES = {
   lecturers: {
     title: "Impor Data Dosen (CSV)",
     columns: ["nip", "name", "code", "academic_title", "department", "email"],
-    example: "198001012005011001, Dr. Ir. Budi S, M.T., BS, Dr. Ir. ..., M.T., Teknik Informatika, budi@pens.ac.id",
+    example: "198001012005011001, Dosen Alpha, S.Kom., M.T., D-ALP, S.Kom., M.T., Teknik Informatika, dosen.alpha@pens.ac.id",
     file: "dosen.csv"
   },
   students: {
     title: "Impor Data Mahasiswa (CSV)",
     columns: ["nrp", "name", "class", "cohort_year", "department", "email"],
-    example: "3123500001, Ahmad Realdho, 3 D4 IT A, 2023, Teknik Informatika, realdho@student.pens.ac.id",
+    example: "3122000001, Mahasiswa Alpha, 3 D4 IT A, 2022, Teknik Informatika, mhs.alpha@student.pens.ac.id",
     file: "mahasiswa.csv"
   }
 };
@@ -2557,14 +2577,14 @@ const CSV_SAMPLE_ROWS = {
     { code: "XYZ999", name: "", sks: "2", semester: "3", department: "Teknik Informatika" }
   ],
   lecturers: [
-    { nip: "198001012005011001", name: "Dr. Ir. Budi S, M.T.", code: "BS", academic_title: "Dr. Ir., M.T.", department: "Teknik Informatika", email: "budi@pens.ac.id" },
-    { nip: "198505052010122002", name: "Sri Wahyuni, S.Kom., M.T.", code: "SW", academic_title: "M.T.", department: "Teknik Informatika", email: "sri@pens.ac.id" },
+    { nip: "198001012005011001", name: "Dosen Alpha, S.Kom., M.T.", code: "D-ALP", academic_title: "S.Kom., M.T.", department: "Teknik Informatika", email: "dosen.alpha@pens.ac.id" },
+    { nip: "198202022006021002", name: "Dosen Beta, S.Kom., M.T.", code: "D-BET", academic_title: "S.Kom., M.T.", department: "Teknik Informatika", email: "dosen.beta@pens.ac.id" },
     { nip: "", name: "Dosen Tanpa NIP", code: "DT", academic_title: "", department: "Teknik Informatika", email: "dt@pens.ac.id" }
   ],
   students: [
-    { nrp: "3123500001", name: "Ahmad Realdho", class: "3 D4 IT A", cohort_year: "2023", department: "Teknik Informatika", email: "realdho@student.pens.ac.id" },
-    { nrp: "3123500002", name: "Dewi Anggraini", class: "3 D4 IT A", cohort_year: "2023", department: "Teknik Informatika", email: "dewi@student.pens.ac.id" },
-    { nrp: "", name: "Mahasiswa Tanpa NRP", class: "3 D4 IT B", cohort_year: "2023", department: "Teknik Informatika", email: "" }
+    { nrp: "3122000001", name: "Mahasiswa Alpha", class: "3 D4 IT A", cohort_year: "2022", department: "Teknik Informatika", email: "mhs.alpha@student.pens.ac.id" },
+    { nrp: "3122000002", name: "Mahasiswa Beta", class: "3 D4 IT A", cohort_year: "2022", department: "Teknik Informatika", email: "mhs.beta@student.pens.ac.id" },
+    { nrp: "", name: "Mahasiswa Tanpa NRP", class: "3 D4 IT B", cohort_year: "2022", department: "Teknik Informatika", email: "" }
   ]
 };
 
@@ -2794,9 +2814,9 @@ function setupCsvDropArea() {
 function simulateFileUpload() {
   if (currentCsvEntity === "schedules") {
     pendingCsvRows = [
-      { id: 1, code: "WMP301", title: "Workshop Mesin Pembelajaran", lecturer: "Dr. Ir. Budi Sxxxx, M.T.", day: "Senin", time: "08:00 - 11:00", room: "Lab C 102", errorType: null },
+      { id: 1, code: "WMP301", title: "Workshop Mesin Pembelajaran", lecturer: "Dosen Alpha, S.Kom., M.T.", day: "Senin", time: "08:00 - 11:00", room: "Lab C 102", errorType: null },
       { id: 2, code: "IOT402", title: "Internet of Things Terapan", lecturer: "Dosen Tidak Ditemukan", day: "Rabu", time: "13:00 - 16:00", room: "Lab C 103", errorType: "lecturer" },
-      { id: 3, code: "XYZ999", title: "Kelas Tidak Terdaftar", lecturer: "Nur Rosyid Mxxxx, S.Kom., M.T.", day: "Kamis", time: "09:00 - 11:00", room: "SAW-06.10", errorType: "class" }
+      { id: 3, code: "XYZ999", title: "Kelas Tidak Terdaftar", lecturer: "Dosen Beta, S.Kom., M.T.", day: "Kamis", time: "09:00 - 11:00", room: "SAW-06.10", errorType: "class" }
     ];
   } else {
     pendingCsvRows = CSV_SAMPLE_ROWS[currentCsvEntity].map((row, index) => ({ id: index + 1, errorType: null, ...row }));

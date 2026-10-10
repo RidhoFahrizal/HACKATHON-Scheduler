@@ -14,9 +14,9 @@ use Illuminate\Support\Str;
 final class DemoActorResolver
 {
     public const ROLES = [
-        'mahasiswa' => ['label' => 'Mahasiswa', 'name' => 'Realdho Fahryz', 'email' => 'realdho@it.student.pens.ac.id'],
-        'dosen' => ['label' => 'Dosen', 'name' => 'Dr. Ir. Budi Sxxxx, M.T.', 'email' => 'budi.sxxxx@pens.ac.id'],
-        'baak' => ['label' => 'BAAK', 'name' => 'Biro Administrasi Akademik', 'email' => 'baak@pens.ac.id'],
+        'mahasiswa' => ['label' => 'Mahasiswa', 'name' => 'Mahasiswa Alpha', 'email' => 'mhs.alpha@student.pens.ac.id'],
+        'dosen' => ['label' => 'Dosen', 'name' => 'Dosen Alpha, S.Kom., M.T.', 'email' => 'dosen.alpha@pens.ac.id'],
+        'baak' => ['label' => 'BAAK', 'name' => 'Petugas BAAK Kampus', 'email' => 'baak@pens.ac.id'],
     ];
 
     public function roleFor(Request $request): string

@@ -40,6 +40,12 @@ class RoleSeeder extends Seeder
                 'description' => 'Staff TU yang membantu pengelolaan jadwal dan ruangan',
                 'is_active' => true,
             ],
+            [
+                'code' => 'baak',
+                'name' => 'Biro Administrasi Akademik',
+                'description' => 'Petugas BAAK yang mengelola ruangan, jadwal, dan kurikulum kampus',
+                'is_active' => true,
+            ],
         ];
 
         foreach ($roles as $role) {

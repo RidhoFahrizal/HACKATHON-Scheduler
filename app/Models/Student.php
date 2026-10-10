@@ -32,4 +32,9 @@ class Student extends Model
     {
         return $this->hasMany(StudentSubject::class, 'studentId');
     }
+
+    public function getNameAttribute(): string
+    {
+        return $this->username ?? '';
+    }
 }

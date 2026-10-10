@@ -11,9 +11,9 @@
   <div class="topbar-right">
     <div class="profile-widget-wrapper">
       <button type="button" class="user-profile-widget" id="user-profile-widget" aria-haspopup="true" aria-expanded="false">
-        <div class="user-avatar-circle" id="user-avatar-circle">R</div>
+        <div class="user-avatar-circle" id="user-avatar-circle">M</div>
         <div class="user-meta-info">
-          <span class="user-display-name" id="user-display-name">Realdho Fahryz</span>
+          <span class="user-display-name" id="user-display-name">Mahasiswa Alpha</span>
           <span class="user-role-badge" id="user-role-badge">Mahasiswa</span>
         </div>
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="profile-chevron">
@@ -23,9 +23,9 @@
 
       <div class="profile-details-popover" id="profile-details-popover">
         <div class="popover-profile-header">
-          <div class="popover-avatar" id="popover-avatar">R</div>
+          <div class="popover-avatar" id="popover-avatar">M</div>
           <div>
-            <h4 class="popover-name" id="popover-name">Realdho Fahryz</h4>
+            <h4 class="popover-name" id="popover-name">Mahasiswa Alpha</h4>
             <span class="popover-role" id="popover-role">Mahasiswa</span>
           </div>
         </div>
@@ -33,7 +33,7 @@
         <div class="popover-details-list">
           <div class="popover-detail-row">
             <span class="detail-label" id="popover-id-label">NRP</span>
-            <span class="detail-value" id="popover-id-value">1234567890</span>
+            <span class="detail-value" id="popover-id-value">3122000001</span>
           </div>
           <div class="popover-detail-row">
             <span class="detail-label">Email</span>

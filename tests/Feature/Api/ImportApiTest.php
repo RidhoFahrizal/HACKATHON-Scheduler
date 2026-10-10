@@ -37,14 +37,14 @@ test('can import subjects, lecturers, and students', function () {
             ['nip' => '19800001', 'name' => 'Dosen Baru', 'code' => 'DB', 'email' => 'db@pens.ac.id'],
         ],
     ])->assertOk();
-    expect(Lecturer::where('nip' => '19800001')->exists())->toBeTrue();
+    expect(Lecturer::where('nip', '19800001')->exists())->toBeTrue();
 
     $this->postJson('/api/v1/import/students', [
         'rows' => [
             ['nrp' => '31230001', 'name' => 'Mhs Baru', 'class' => '1 D4 IT A', 'cohort_year' => '2024'],
         ],
     ])->assertOk();
-    expect(Student::where('nrp' => '31230001')->exists())->toBeTrue();
+    expect(Student::where('nrp', '31230001')->exists())->toBeTrue();
 });
 
 test('can import from uploaded csv file', function () {

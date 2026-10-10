@@ -49,17 +49,17 @@
 
     <div class="role-dropdown-menu" id="role-dropdown-menu" role="listbox">
       <div class="role-option-item selected" data-role="mahasiswa" role="option">
-        <div class="role-avatar-badge" style="background:#4f46e5;">R</div>
+        <div class="role-avatar-badge" style="background:#4f46e5;">M</div>
         <div class="role-option-text">
           <span class="role-option-title">Mahasiswa</span>
-          <span class="role-option-desc">Realdho Fahryz (1234567890)</span>
+          <span class="role-option-desc">Mahasiswa Alpha (3122000001)</span>
         </div>
       </div>
       <div class="role-option-item" data-role="dosen" role="option">
-        <div class="role-avatar-badge" style="background:#059669;">B</div>
+        <div class="role-avatar-badge" style="background:#059669;">D</div>
         <div class="role-option-text">
           <span class="role-option-title">Dosen</span>
-          <span class="role-option-desc">Dr. Ir. Budi Sxxxx, M.T.</span>
+          <span class="role-option-desc">Dosen Alpha, S.Kom., M.T.</span>
         </div>
       </div>
       <div class="role-option-item" data-role="baak" role="option">

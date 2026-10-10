@@ -26,13 +26,11 @@ class DatabaseSeeder extends Seeder
             ChatSeeder::class,
             AuditLogSeeder::class,
             EngineRunSeeder::class,
-            BuildingSeeder::class,
-            RoleSeeder::class,
         ]);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        User::firstOrCreate(
+            ['email' => 'test@example.com'],
+            ['name' => 'Test User', 'password' => bcrypt('password')]
+        );
     }
 }

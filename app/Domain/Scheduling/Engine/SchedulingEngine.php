@@ -34,7 +34,7 @@ class SchedulingEngine
         $this->rules = $input->rules;
         $this->timeSlots = $this->generateTimeSlots();
 
-        $this->addStep(1, 'Ambil data & waktu belajar', array_merge($input->toArray(), [
+        $this->addStep(1, 'Ambil bahan', array_merge($input->toArray(), [
             'scope' => $request->scope->value,
             'target_week' => $request->targetWeek,
             'weeks_to_evaluate' => $request->weeksToEvaluate,
@@ -108,7 +108,7 @@ class SchedulingEngine
         $this->rules = $input->rules;
         $this->timeSlots = $this->generateTimeSlots();
 
-        $this->addStep(1, 'Ambil data & waktu belajar', array_merge($input->toArray(), [
+        $this->addStep(1, 'Ambil bahan', array_merge($input->toArray(), [
             'scope' => $request->scope->value,
             'target_week' => $request->targetWeek,
             'weeks_to_evaluate' => $request->weeksToEvaluate,

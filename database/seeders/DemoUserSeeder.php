@@ -16,98 +16,102 @@ class DemoUserSeeder extends Seeder
         $dosenRole = Role::where('code', 'dosen')->first();
         $mahasiswaRole = Role::where('code', 'mahasiswa')->first();
         $staffRole = Role::where('code', 'staff')->first();
+        $baakRole = Role::where('code', 'baak')->first() ?? $staffRole;
 
         $users = [
+            // PENSCEDULER Demo Active Role Users (Synthetic Names)
             [
-                'name' => 'Admin Sistem',
+                'name' => 'Mahasiswa Alpha',
+                'email' => 'mhs.alpha@student.pens.ac.id',
+                'password' => Hash::make('password'),
+                'email_verified_at' => now(),
+                'role_id' => $mahasiswaRole->id,
+            ],
+            [
+                'name' => 'Dosen Alpha, S.Kom., M.T.',
+                'email' => 'dosen.alpha@pens.ac.id',
+                'password' => Hash::make('password'),
+                'email_verified_at' => now(),
+                'role_id' => $dosenRole->id,
+            ],
+            [
+                'name' => 'Petugas BAAK Kampus',
+                'email' => 'baak@pens.ac.id',
+                'password' => Hash::make('password'),
+                'email_verified_at' => now(),
+                'role_id' => $baakRole->id,
+            ],
+
+            // Other Academic Users (Synthetic Fictional Names)
+            [
+                'name' => 'Admin Sistem Kampus',
                 'email' => 'admin@univ.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role_id' => $adminRole->id,
             ],
             [
-                'name' => 'Dr. Ir. Hendra Gunawan, M.T.',
+                'name' => 'Dosen Kaprodi, M.T.',
                 'email' => 'kaprodi@univ.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role_id' => $kaprodiRole->id,
             ],
             [
-                'name' => 'Dr. Budi Santoso, M.Kom.',
-                'email' => 'budi.santoso@univ.ac.id',
+                'name' => 'Dosen Beta, S.Kom., M.T.',
+                'email' => 'dosen.beta@pens.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role_id' => $dosenRole->id,
             ],
             [
-                'name' => 'Prof. Dr. Siti Rahayu, M.Sc.',
-                'email' => 'siti.rahayu@univ.ac.id',
+                'name' => 'Dosen Gamma, S.Kom., M.T.',
+                'email' => 'dosen.gamma@pens.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role_id' => $dosenRole->id,
             ],
             [
-                'name' => 'Dr. Ahmad Wijaya, M.T.',
-                'email' => 'ahmad.wijaya@univ.ac.id',
+                'name' => 'Dosen Delta, S.ST., M.Tr.Kom.',
+                'email' => 'dosen.delta@pens.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role_id' => $dosenRole->id,
             ],
             [
-                'name' => 'Dr. Linda Kusuma, M.Kom.',
-                'email' => 'linda.kusuma@univ.ac.id',
+                'name' => 'Dosen Epsilon, S.Kom., M.Kom.',
+                'email' => 'dosen.epsilon@pens.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role_id' => $dosenRole->id,
             ],
             [
-                'name' => 'Ir. Rudi Hartono, M.Eng.',
-                'email' => 'rudi.hartono@univ.ac.id',
+                'name' => 'Dosen Zeta, Ph.D.',
+                'email' => 'dosen.zeta@pens.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role_id' => $dosenRole->id,
             ],
             [
-                'name' => 'Dr. Maya Putri, M.Si.',
-                'email' => 'maya.putri@univ.ac.id',
+                'name' => 'Dosen Eta, Ph.D.',
+                'email' => 'dosen.eta@pens.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'role_id' => $dosenRole->id,
             ],
             [
-                'name' => 'Dr. Fajar Nugroho, M.Cs.',
-                'email' => 'fajar.nugroho@univ.ac.id',
+                'name' => 'Mahasiswa Beta',
+                'email' => 'mhs.beta@student.pens.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
-                'role_id' => $dosenRole->id,
+                'role_id' => $mahasiswaRole->id,
             ],
             [
-                'name' => 'Dr. Ani Suryani, M.T.',
-                'email' => 'ani.suryani@univ.ac.id',
+                'name' => 'Mahasiswa Gamma',
+                'email' => 'mhs.gamma@student.pens.ac.id',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
-                'role_id' => $dosenRole->id,
-            ],
-            [
-                'name' => 'Prof. Bambang Irawan, Ph.D.',
-                'email' => 'bambang.irawan@univ.ac.id',
-                'password' => Hash::make('password'),
-                'email_verified_at' => now(),
-                'role_id' => $dosenRole->id,
-            ],
-            [
-                'name' => 'Dewi Lestari',
-                'email' => 'dewi.lestari@univ.ac.id',
-                'password' => Hash::make('password'),
-                'email_verified_at' => now(),
-                'role_id' => $staffRole->id,
-            ],
-            [
-                'name' => 'Rina Wulandari',
-                'email' => 'rina.wulandari@univ.ac.id',
-                'password' => Hash::make('password'),
-                'email_verified_at' => now(),
-                'role_id' => $staffRole->id,
+                'role_id' => $mahasiswaRole->id,
             ],
         ];
 

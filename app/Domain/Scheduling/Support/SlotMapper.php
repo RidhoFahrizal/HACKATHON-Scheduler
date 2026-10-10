@@ -50,6 +50,33 @@ final class SlotMapper
         }
 
         if ($startSlot === null || $endSlot === null || $endSlot < $startSlot) {
+            $startMin = $this->toMinutes($start);
+            $endMin = $this->toMinutes($end);
+            $bestStartDiff = 35;
+            $bestEndDiff = 35;
+            $candStart = null;
+            $candEnd = null;
+
+            foreach ($this->grid() as $slot) {
+                if ($slot['is_blocked']) {
+                    continue;
+                }
+                $sDiff = abs($this->toMinutes($slot['start_time']) - $startMin);
+                if ($sDiff < $bestStartDiff) {
+                    $bestStartDiff = $sDiff;
+                    $candStart = $slot['slot_index'];
+                }
+                $eDiff = abs($this->toMinutes($slot['end_time']) - $endMin);
+                if ($eDiff < $bestEndDiff) {
+                    $bestEndDiff = $eDiff;
+                    $candEnd = $slot['slot_index'];
+                }
+            }
+
+            if ($candStart !== null && $candEnd !== null && $candEnd >= $candStart) {
+                return [$candStart, $candEnd];
+            }
+
             return null;
         }
 
@@ -80,5 +107,14 @@ final class SlotMapper
         }
 
         return sprintf('%02d:%02d', (int) $parts[1], (int) $parts[2]);
+    }
+
+    private function toMinutes(string $time): int
+    {
+        if (preg_match('/^(\d{1,2}):(\d{2})/', trim($time), $parts) !== 1) {
+            return 0;
+        }
+
+        return ((int) $parts[1] * 60) + (int) $parts[2];
     }
 }
